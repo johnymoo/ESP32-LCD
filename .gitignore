@@ -1,0 +1,8 @@
+.tools/
+**/build/
+**/managed_components/
+**/sdkconfig
+**/sdkconfig.old
+firmware/backups/*.bin
+vendor/waveshare/downloads/*.zip
+

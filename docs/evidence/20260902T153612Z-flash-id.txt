@@ -1,0 +1,8 @@
+esptool.py v4.12.0
+Serial port /dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_A4:CB:8F:DA:E7:B8-if00
+
+A fatal error occurred: Could not open /dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_A4:CB:8F:DA:E7:B8-if00, the port is busy or doesn't exist.
+([Errno 13] could not open port /dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_A4:CB:8F:DA:E7:B8-if00: [Errno 13] Permission denied: '/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_A4:CB:8F:DA:E7:B8-if00')
+
+Hint: Try to add user into dialout or uucp group.
+
