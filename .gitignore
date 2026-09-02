@@ -5,4 +5,6 @@
 **/sdkconfig.old
 firmware/backups/*.bin
 vendor/waveshare/downloads/*.zip
-
+firmware/touch-demo/main/wifi_credentials.h
+__pycache__/
+*.pyc
