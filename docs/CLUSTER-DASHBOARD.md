@@ -31,8 +31,10 @@ two pages:
 - `MODEL INFERENCE` shows service health, running and waiting requests, KV
   cache use, and prompt/generation token rates.
 
-The firmware advances to the next page every ten seconds. A tap anywhere on
-the active page advances immediately and resets the ten-second page timer.
+The status service supplies the page interval to both clients through the
+`page_rotation_ms` field. A tap anywhere on the active page advances
+immediately and resets the timer. The firmware falls back to ten seconds when
+the field is absent or outside the supported 1-300 second range.
 
 Wi-Fi credentials live only in the ignored file
 `firmware/touch-demo/main/wifi_credentials.h`. The tracked
@@ -48,8 +50,24 @@ http://192.168.88.181:9108/
 
 The page reproduces both 320 x 172 LCD pages, scales them to fit the browser
 viewport, and refreshes the same status data every two seconds. It follows the
-same ten-second rotation and supports click or touch to advance. It has no
+same service-configured rotation and supports click or touch to advance. It has no
 external assets or build dependencies.
+
+## Configure page rotation
+
+Set `--page-rotation-seconds` on the status service. Valid values are integers
+from 1 through 300; the tracked service unit defaults to 10:
+
+```text
+ExecStart=/usr/bin/python3 /home/chriswang/cluster-display-status/cluster_status_server.py --host 0.0.0.0 --port 9108 --page-rotation-seconds 10
+```
+
+After changing the installed unit, reload and restart only this user service:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user restart cluster-display-status.service
+```
 
 ## Service operations
 

@@ -15,11 +15,19 @@ WORKER = "admin@192.168.88.198"
 METRICS_URL = "http://127.0.0.1:8890/metrics"
 MODEL_NAME = "deepseek-v4-flash-0731"
 DASHBOARD_PATH = Path(__file__).with_name("dashboard.html")
+PAGE_ROTATION_MS = 10000
 
 _cache_lock = threading.Lock()
 _cache_time = 0.0
 _cache_payload = None
 _counter_state = {}
+
+
+def rotation_seconds(value):
+    seconds = int(value)
+    if not 1 <= seconds <= 300:
+        raise argparse.ArgumentTypeError("must be between 1 and 300")
+    return seconds
 
 
 def run(command, timeout=3):
@@ -150,6 +158,7 @@ def collect():
 
         payload = {
             "updated": time.strftime("%H:%M:%S"),
+            "page_rotation_ms": PAGE_ROTATION_MS,
             "head": None,
             "worker": None,
             "model": model_status(now),
@@ -219,10 +228,19 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    global PAGE_ROTATION_MS
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=9108)
+    parser.add_argument(
+        "--page-rotation-seconds",
+        type=rotation_seconds,
+        default=10,
+        metavar="SECONDS",
+        help="dashboard page rotation interval from 1 to 300 seconds (default: 10)",
+    )
     args = parser.parse_args()
+    PAGE_ROTATION_MS = args.page_rotation_seconds * 1000
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     server.serve_forever()
 

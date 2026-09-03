@@ -137,7 +137,11 @@ IN 0  OUT 0 tok/s</div>
     const modelState = document.getElementById('model-state');
     const modelMetrics = document.getElementById('model-metrics');
     const footers = document.querySelectorAll('.footer');
+    const DEFAULT_PAGE_ROTATION_MS = 10000;
+    const MIN_PAGE_ROTATION_MS = 1000;
+    const MAX_PAGE_ROTATION_MS = 300000;
     let currentPage = 0;
+    let pageRotationMs = DEFAULT_PAGE_ROTATION_MS;
     let pageTimer;
 
     function fitScreen() {
@@ -166,7 +170,7 @@ IN 0  OUT 0 tok/s</div>
 
     function scheduleNextPage() {
       clearInterval(pageTimer);
-      pageTimer = setInterval(() => showPage((currentPage + 1) % pages.length), 10000);
+      pageTimer = setInterval(() => showPage((currentPage + 1) % pages.length), pageRotationMs);
     }
 
     function nextPage() {
@@ -182,6 +186,14 @@ IN 0  OUT 0 tok/s</div>
     }
 
     function render(data) {
+      const configuredRotation = Number(data.page_rotation_ms);
+      const nextRotation = Number.isFinite(configuredRotation) &&
+        configuredRotation >= MIN_PAGE_ROTATION_MS && configuredRotation <= MAX_PAGE_ROTATION_MS
+        ? configuredRotation : DEFAULT_PAGE_ROTATION_MS;
+      if (nextRotation !== pageRotationMs) {
+        pageRotationMs = nextRotation;
+        scheduleNextPage();
+      }
       head.textContent = hostText('HEAD', data.head);
       worker.textContent = hostText('WORKER', data.worker);
       const value = data.model || {};

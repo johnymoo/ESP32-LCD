@@ -1,3 +1,4 @@
+#include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -28,7 +29,9 @@
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT BIT1
 #define WIFI_MAX_RETRY 10
-#define PAGE_ROTATION_MS 10000
+#define DEFAULT_PAGE_ROTATION_MS 10000
+#define MIN_PAGE_ROTATION_MS 1000
+#define MAX_PAGE_ROTATION_MS 300000
 
 static const char *TAG = "cluster_display";
 
@@ -50,6 +53,7 @@ static lv_obj_t *system_footer_label;
 static lv_obj_t *model_footer_label;
 static lv_timer_t *page_timer;
 static unsigned current_page;
+static uint32_t page_rotation_ms = DEFAULT_PAGE_ROTATION_MS;
 
 typedef struct {
     char data[2048];
@@ -187,7 +191,7 @@ static void create_ui(void)
     lv_obj_add_event_cb(system_page, page_touch_event, LV_EVENT_CLICKED, NULL);
     lv_obj_add_event_cb(model_page, page_touch_event, LV_EVENT_CLICKED, NULL);
     lv_obj_add_flag(model_page, LV_OBJ_FLAG_HIDDEN);
-    page_timer = lv_timer_create(page_timer_event, PAGE_ROTATION_MS, NULL);
+    page_timer = lv_timer_create(page_timer_event, page_rotation_ms, NULL);
 }
 
 static void set_footer(const char *text, lv_color_t color)
@@ -219,6 +223,11 @@ static void update_dashboard(const char *json)
     cJSON *worker = cJSON_GetObjectItemCaseSensitive(root, "worker");
     cJSON *model = cJSON_GetObjectItemCaseSensitive(root, "model");
     cJSON *updated = cJSON_GetObjectItemCaseSensitive(root, "updated");
+    double configured_rotation = json_number(root, "page_rotation_ms", DEFAULT_PAGE_ROTATION_MS);
+    uint32_t new_rotation_ms = configured_rotation >= MIN_PAGE_ROTATION_MS &&
+                                           configured_rotation <= MAX_PAGE_ROTATION_MS
+                                   ? (uint32_t)configured_rotation
+                                   : DEFAULT_PAGE_ROTATION_MS;
 
     if (!cJSON_IsObject(head) || !cJSON_IsObject(worker) || !cJSON_IsObject(model)) {
         cJSON_Delete(root);
@@ -249,6 +258,12 @@ static void update_dashboard(const char *json)
              cJSON_IsString(updated) ? updated->valuestring : "--:--:--");
 
     if (lvgl_port_lock(1000)) {
+        if (new_rotation_ms != page_rotation_ms) {
+            page_rotation_ms = new_rotation_ms;
+            lv_timer_set_period(page_timer, page_rotation_ms);
+            lv_timer_reset(page_timer);
+            ESP_LOGI(TAG, "page rotation updated: %" PRIu32 " ms", page_rotation_ms);
+        }
         lv_label_set_text(head_label, head_text);
         lv_label_set_text(worker_label, worker_text);
         lv_label_set_text(model_state_label, model_ok ? "MODEL ONLINE" : "MODEL DOWN");
