@@ -21,6 +21,19 @@ GB10 reports GPU memory fields as `N/A`, so the dashboard intentionally does
 not display GPU memory usage. The service does not mutate model containers or
 deployment configuration.
 
+## Display pages
+
+The 320 x 172 UI uses 20 px metric text and a 24 px model-state label. It has
+two pages:
+
+- `SYSTEM LOAD` shows temperature, GPU utilization, system load, RAM use, and
+  power for both hosts.
+- `MODEL INFERENCE` shows service health, running and waiting requests, KV
+  cache use, and prompt/generation token rates.
+
+The firmware advances to the next page every five seconds. A tap anywhere on
+the active page advances immediately and resets the five-second page timer.
+
 Wi-Fi credentials live only in the ignored file
 `firmware/touch-demo/main/wifi_credentials.h`. The tracked
 `wifi_credentials.example.h` documents the required defines.
@@ -33,9 +46,10 @@ Open the following URL from the LAN:
 http://192.168.88.181:9108/
 ```
 
-The page reproduces the complete 320 x 172 LCD layout, scales it to fit the
-browser viewport, and refreshes the same status data every two seconds. It has
-no external assets or build dependencies.
+The page reproduces both 320 x 172 LCD pages, scales them to fit the browser
+viewport, and refreshes the same status data every two seconds. It follows the
+same five-second rotation and supports click or touch to advance. It has no
+external assets or build dependencies.
 
 ## Service operations
 

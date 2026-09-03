@@ -23,8 +23,20 @@
       overflow: hidden;
       transform-origin: top left;
       background: #091a24;
+      cursor: pointer;
+      touch-action: manipulation;
+      user-select: none;
       letter-spacing: 0;
     }
+    .page {
+      position: absolute;
+      inset: 0;
+      background: #091a24;
+      opacity: 1;
+      visibility: visible;
+      transition: opacity 160ms ease;
+    }
+    .page.hidden { opacity: 0; visibility: hidden; }
     .title {
       position: absolute;
       left: 8px;
@@ -34,36 +46,52 @@
       font-weight: 700;
       line-height: 24px;
     }
-    .mode {
+    .page-index {
       position: absolute;
       right: 8px;
-      top: 7px;
+      top: 3px;
       color: #8ba8b7;
-      font-size: 14px;
-      font-weight: 600;
-      line-height: 17px;
+      font-size: 20px;
+      line-height: 24px;
     }
     .panel {
       position: absolute;
+      top: 31px;
+      height: 116px;
       padding: 7px;
       overflow: hidden;
       border: 1px solid #315568;
       border-radius: 4px;
       background: #172b3a;
-      font-size: 16px;
-      font-weight: 600;
-      line-height: 17px;
       white-space: pre;
     }
-    #head { left: 5px; top: 29px; width: 153px; height: 65px; }
-    #worker { left: 162px; top: 29px; width: 153px; height: 65px; }
-    #model { left: 5px; top: 98px; width: 310px; height: 49px; font-size: 14px; }
-    #model.online { color: #7de2d1; }
-    #model.offline { color: #ff6b6b; }
-    #footer {
+    .host {
+      width: 153px;
+      font-size: 20px;
+      font-weight: 600;
+      line-height: 24px;
+    }
+    #head { left: 5px; }
+    #worker { left: 162px; }
+    #model-panel { left: 5px; width: 310px; white-space: normal; }
+    #model-state {
+      font-size: 24px;
+      font-weight: 700;
+      line-height: 29px;
+    }
+    #model-state.online { color: #7de2d1; }
+    #model-state.offline { color: #ff6b6b; }
+    #model-metrics {
+      margin-top: 0;
+      font-size: 20px;
+      font-weight: 600;
+      line-height: 24px;
+      white-space: pre;
+    }
+    .footer {
       position: absolute;
       right: 8px;
-      bottom: 5px;
+      bottom: 4px;
       width: 304px;
       overflow: hidden;
       color: #8ba8b7;
@@ -72,27 +100,45 @@
       text-align: right;
       white-space: nowrap;
     }
-    #footer.error { color: #ffb86b; }
+    .footer.error { color: #ffb86b; }
   </style>
 </head>
 <body>
   <main id="stage" aria-label="Live mirror of the GB10 cluster LCD">
     <section id="screen" aria-live="polite">
-      <div class="title">GB10 CLUSTER</div>
-      <div class="mode">DEEPSEEK V4</div>
-      <div class="panel" id="head">Waiting...</div>
-      <div class="panel" id="worker">Waiting...</div>
-      <div class="panel offline" id="model">MODEL DOWN</div>
-      <div id="footer">Web: connecting</div>
+      <div class="page" id="system-page">
+        <div class="title">SYSTEM LOAD</div>
+        <div class="page-index">1/2</div>
+        <div class="panel host" id="head">HEAD
+Waiting...</div>
+        <div class="panel host" id="worker">WORKER
+Waiting...</div>
+        <div class="footer">Web: connecting</div>
+      </div>
+      <div class="page hidden" id="model-page">
+        <div class="title">MODEL INFERENCE</div>
+        <div class="page-index">2/2</div>
+        <div class="panel" id="model-panel">
+          <div class="offline" id="model-state">MODEL DOWN</div>
+          <div id="model-metrics">RUN 0  WAIT 0
+KV 0%
+IN 0  OUT 0 tok/s</div>
+        </div>
+        <div class="footer">Web: connecting</div>
+      </div>
     </section>
   </main>
   <script>
     const stage = document.getElementById('stage');
     const screen = document.getElementById('screen');
+    const pages = [document.getElementById('system-page'), document.getElementById('model-page')];
     const head = document.getElementById('head');
     const worker = document.getElementById('worker');
-    const model = document.getElementById('model');
-    const footer = document.getElementById('footer');
+    const modelState = document.getElementById('model-state');
+    const modelMetrics = document.getElementById('model-metrics');
+    const footers = document.querySelectorAll('.footer');
+    let currentPage = 0;
+    let pageTimer;
 
     function fitScreen() {
       const scale = Math.min((innerWidth - 24) / 320, (innerHeight - 24) / 172, 4);
@@ -107,9 +153,32 @@
 
     function hostText(name, value) {
       if (!value) return `${name}\nUNAVAILABLE`;
-      return `${name}  ${number(value.temp_c)} C\n` +
-        `GPU ${number(value.gpu_util_pct)}%  L ${number(value.load1, 1)}\n` +
-        `MEM ${number(value.mem_used_pct)}%  ${number(value.power_w)} W`;
+      return `${name} ${number(value.temp_c)}C\n` +
+        `GPU ${number(value.gpu_util_pct)}%\n` +
+        `LOAD ${number(value.load1, 1)}\n` +
+        `RAM ${number(value.mem_used_pct)}% ${number(value.power_w)}W`;
+    }
+
+    function showPage(index) {
+      currentPage = index;
+      pages.forEach((page, pageIndex) => page.classList.toggle('hidden', pageIndex !== index));
+    }
+
+    function scheduleNextPage() {
+      clearInterval(pageTimer);
+      pageTimer = setInterval(() => showPage((currentPage + 1) % pages.length), 5000);
+    }
+
+    function nextPage() {
+      showPage((currentPage + 1) % pages.length);
+      scheduleNextPage();
+    }
+
+    function setFooter(value, error = false) {
+      footers.forEach(footer => {
+        footer.className = `footer${error ? ' error' : ''}`;
+        footer.textContent = value;
+      });
     }
 
     function render(data) {
@@ -117,12 +186,12 @@
       worker.textContent = hostText('WORKER', data.worker);
       const value = data.model || {};
       const online = value.healthy === true;
-      model.className = `panel ${online ? 'online' : 'offline'}`;
-      model.textContent = `${online ? 'MODEL ONLINE' : 'MODEL DOWN'}   ` +
-        `RUN ${number(value.running)}  WAIT ${number(value.waiting)}  KV ${number(value.kv_pct)}%\n` +
-        `TOK/s  IN ${number(value.prompt_tps)}  OUT ${number(value.generation_tps)}`;
-      footer.className = '';
-      footer.textContent = `WEB LIVE  Updated ${data.updated || '--:--:--'}`;
+      modelState.className = online ? 'online' : 'offline';
+      modelState.textContent = online ? 'MODEL ONLINE' : 'MODEL DOWN';
+      modelMetrics.textContent = `RUN ${number(value.running)}  WAIT ${number(value.waiting)}\n` +
+        `KV ${number(value.kv_pct)}%\n` +
+        `IN ${number(value.prompt_tps)}  OUT ${number(value.generation_tps)} tok/s`;
+      setFooter(`WEB LIVE  Updated ${data.updated || '--:--:--'}`);
     }
 
     async function refresh() {
@@ -131,15 +200,16 @@
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         render(await response.json());
       } catch (error) {
-        footer.className = 'error';
-        footer.textContent = 'Status endpoint unreachable';
+        setFooter('Status endpoint unreachable', true);
       }
     }
 
     addEventListener('resize', fitScreen);
+    screen.addEventListener('pointerup', nextPage);
     fitScreen();
     refresh();
     setInterval(refresh, 2000);
+    scheduleNextPage();
   </script>
 </body>
 </html>

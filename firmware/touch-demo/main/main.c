@@ -28,6 +28,7 @@
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT BIT1
 #define WIFI_MAX_RETRY 10
+#define PAGE_ROTATION_MS 5000
 
 static const char *TAG = "cluster_display";
 
@@ -39,10 +40,16 @@ static EventGroupHandle_t wifi_events;
 static int wifi_retries;
 static char wifi_ip[16] = "--";
 
+static lv_obj_t *system_page;
+static lv_obj_t *model_page;
 static lv_obj_t *head_label;
 static lv_obj_t *worker_label;
-static lv_obj_t *model_label;
-static lv_obj_t *footer_label;
+static lv_obj_t *model_state_label;
+static lv_obj_t *model_metrics_label;
+static lv_obj_t *system_footer_label;
+static lv_obj_t *model_footer_label;
+static lv_timer_t *page_timer;
+static unsigned current_page;
 
 typedef struct {
     char data[2048];
@@ -60,18 +67,77 @@ static lv_obj_t *create_panel(lv_obj_t *parent, int x, int y, int width, int hei
     lv_obj_set_style_border_width(panel, 1, 0);
     lv_obj_set_style_pad_all(panel, 7, 0);
     lv_obj_clear_flag(panel, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(panel, LV_OBJ_FLAG_CLICKABLE);
     return panel;
 }
 
-static lv_obj_t *create_panel_label(lv_obj_t *panel)
+static lv_obj_t *create_page(lv_obj_t *screen)
 {
-    lv_obj_t *label = lv_label_create(panel);
-    lv_obj_set_width(label, lv_pct(100));
-    lv_obj_set_style_text_color(label, lv_color_hex(0xE6F1F5), 0);
-    lv_obj_set_style_text_font(label, &lv_font_montserrat_16, 0);
-    lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_LEFT, 0);
-    lv_label_set_text(label, "Waiting...");
-    return label;
+    lv_obj_t *page = lv_obj_create(screen);
+    lv_obj_set_pos(page, 0, 0);
+    lv_obj_set_size(page, LCD_H_RES, LCD_V_RES);
+    lv_obj_set_style_radius(page, 0, 0);
+    lv_obj_set_style_border_width(page, 0, 0);
+    lv_obj_set_style_pad_all(page, 0, 0);
+    lv_obj_set_style_bg_color(page, lv_color_hex(0x091A24), 0);
+    lv_obj_clear_flag(page, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(page, LV_OBJ_FLAG_CLICKABLE);
+    return page;
+}
+
+static void create_title(lv_obj_t *page, const char *text, const char *index)
+{
+    lv_obj_t *title = lv_label_create(page);
+    lv_label_set_text(title, text);
+    lv_obj_set_style_text_color(title, lv_color_hex(0x7DE2D1), 0);
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_20, 0);
+    lv_obj_align(title, LV_ALIGN_TOP_LEFT, 8, 3);
+
+    lv_obj_t *page_index = lv_label_create(page);
+    lv_label_set_text(page_index, index);
+    lv_obj_set_style_text_color(page_index, lv_color_hex(0x8BA8B7), 0);
+    lv_obj_set_style_text_font(page_index, &lv_font_montserrat_20, 0);
+    lv_obj_align(page_index, LV_ALIGN_TOP_RIGHT, -8, 3);
+}
+
+static lv_obj_t *create_footer(lv_obj_t *page)
+{
+    lv_obj_t *footer = lv_label_create(page);
+    lv_label_set_text(footer, "WiFi: connecting");
+    lv_obj_set_width(footer, 304);
+    lv_obj_set_style_text_color(footer, lv_color_hex(0x8BA8B7), 0);
+    lv_obj_set_style_text_align(footer, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_align(footer, LV_ALIGN_BOTTOM_MID, 0, -4);
+    return footer;
+}
+
+static void show_next_page(void)
+{
+    current_page = (current_page + 1) % 2;
+    if (current_page == 0) {
+        lv_obj_clear_flag(system_page, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(model_page, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(system_page, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(model_page, LV_OBJ_FLAG_HIDDEN);
+    }
+    ESP_LOGI(TAG, "display page: %s", current_page == 0 ? "system" : "model");
+}
+
+static void page_timer_event(lv_timer_t *timer)
+{
+    show_next_page();
+}
+
+static void page_touch_event(lv_event_t *event)
+{
+    if (lv_event_get_code(event) != LV_EVENT_CLICKED) {
+        return;
+    }
+    show_next_page();
+    if (page_timer != NULL) {
+        lv_timer_reset(page_timer);
+    }
 }
 
 static void create_ui(void)
@@ -80,37 +146,57 @@ static void create_ui(void)
     lv_obj_set_style_bg_color(screen, lv_color_hex(0x091A24), 0);
     lv_obj_clear_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
 
-    lv_obj_t *title = lv_label_create(screen);
-    lv_label_set_text(title, "GB10 CLUSTER");
-    lv_obj_set_style_text_color(title, lv_color_hex(0x7DE2D1), 0);
-    lv_obj_set_style_text_font(title, &lv_font_montserrat_20, 0);
-    lv_obj_align(title, LV_ALIGN_TOP_LEFT, 8, 3);
+    system_page = create_page(screen);
+    create_title(system_page, "SYSTEM LOAD", "1/2");
 
-    lv_obj_t *mode = lv_label_create(screen);
-    lv_label_set_text(mode, "DEEPSEEK V4");
-    lv_obj_set_style_text_color(mode, lv_color_hex(0x8BA8B7), 0);
-    lv_obj_align(mode, LV_ALIGN_TOP_RIGHT, -8, 7);
+    lv_obj_t *head_panel = create_panel(system_page, 5, 31, 153, 116);
+    head_label = lv_label_create(head_panel);
+    lv_obj_set_width(head_label, lv_pct(100));
+    lv_obj_set_style_text_color(head_label, lv_color_hex(0xE6F1F5), 0);
+    lv_obj_set_style_text_font(head_label, &lv_font_montserrat_20, 0);
+    lv_label_set_text(head_label, "HEAD\nWaiting...");
 
-    head_label = create_panel_label(create_panel(screen, 5, 29, 153, 65));
-    worker_label = create_panel_label(create_panel(screen, 162, 29, 153, 65));
+    lv_obj_t *worker_panel = create_panel(system_page, 162, 31, 153, 116);
+    worker_label = lv_label_create(worker_panel);
+    lv_obj_set_width(worker_label, lv_pct(100));
+    lv_obj_set_style_text_color(worker_label, lv_color_hex(0xE6F1F5), 0);
+    lv_obj_set_style_text_font(worker_label, &lv_font_montserrat_20, 0);
+    lv_label_set_text(worker_label, "WORKER\nWaiting...");
 
-    lv_obj_t *model_panel = create_panel(screen, 5, 98, 310, 49);
-    model_label = create_panel_label(model_panel);
-    lv_obj_set_style_text_font(model_label, &lv_font_montserrat_16, 0);
+    system_footer_label = create_footer(system_page);
 
-    footer_label = lv_label_create(screen);
-    lv_label_set_text(footer_label, "WiFi: connecting");
-    lv_obj_set_width(footer_label, 304);
-    lv_obj_set_style_text_color(footer_label, lv_color_hex(0x8BA8B7), 0);
-    lv_obj_set_style_text_align(footer_label, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_align(footer_label, LV_ALIGN_BOTTOM_MID, 0, -5);
+    model_page = create_page(screen);
+    create_title(model_page, "MODEL INFERENCE", "2/2");
+
+    lv_obj_t *model_panel = create_panel(model_page, 5, 31, 310, 116);
+    model_state_label = lv_label_create(model_panel);
+    lv_obj_set_width(model_state_label, lv_pct(100));
+    lv_obj_set_style_text_color(model_state_label, lv_color_hex(0xFF6B6B), 0);
+    lv_obj_set_style_text_font(model_state_label, &lv_font_montserrat_24, 0);
+    lv_label_set_text(model_state_label, "MODEL DOWN");
+
+    model_metrics_label = lv_label_create(model_panel);
+    lv_obj_set_pos(model_metrics_label, 0, 31);
+    lv_obj_set_width(model_metrics_label, lv_pct(100));
+    lv_obj_set_style_text_color(model_metrics_label, lv_color_hex(0xE6F1F5), 0);
+    lv_obj_set_style_text_font(model_metrics_label, &lv_font_montserrat_20, 0);
+    lv_label_set_text(model_metrics_label, "RUN 0  WAIT 0\nKV 0%\nIN 0  OUT 0 tok/s");
+
+    model_footer_label = create_footer(model_page);
+
+    lv_obj_add_event_cb(system_page, page_touch_event, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(model_page, page_touch_event, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_flag(model_page, LV_OBJ_FLAG_HIDDEN);
+    page_timer = lv_timer_create(page_timer_event, PAGE_ROTATION_MS, NULL);
 }
 
 static void set_footer(const char *text, lv_color_t color)
 {
     if (lvgl_port_lock(1000)) {
-        lv_label_set_text(footer_label, text);
-        lv_obj_set_style_text_color(footer_label, color, 0);
+        lv_label_set_text(system_footer_label, text);
+        lv_label_set_text(model_footer_label, text);
+        lv_obj_set_style_text_color(system_footer_label, color, 0);
+        lv_obj_set_style_text_color(model_footer_label, color, 0);
         lvgl_port_unlock();
     }
 }
@@ -142,21 +228,20 @@ static void update_dashboard(const char *json)
 
     char head_text[96];
     char worker_text[96];
-    char model_text[128];
+    char model_metrics_text[128];
     char footer_text[80];
-    snprintf(head_text, sizeof(head_text), "HEAD  %.0f C\nGPU %.0f%%  L %.1f\nMEM %.0f%%  %.0f W",
+    snprintf(head_text, sizeof(head_text), "HEAD  %.0fC\nGPU %.0f%%\nLOAD %.1f\nRAM %.0f%% %.0fW",
              json_number(head, "temp_c", -1), json_number(head, "gpu_util_pct", -1),
              json_number(head, "load1", -1), json_number(head, "mem_used_pct", -1),
              json_number(head, "power_w", -1));
-    snprintf(worker_text, sizeof(worker_text), "WORKER  %.0f C\nGPU %.0f%%  L %.1f\nMEM %.0f%%  %.0f W",
+    snprintf(worker_text, sizeof(worker_text), "WORKER %.0fC\nGPU %.0f%%\nLOAD %.1f\nRAM %.0f%% %.0fW",
              json_number(worker, "temp_c", -1), json_number(worker, "gpu_util_pct", -1),
              json_number(worker, "load1", -1), json_number(worker, "mem_used_pct", -1),
              json_number(worker, "power_w", -1));
 
     cJSON *healthy = cJSON_GetObjectItemCaseSensitive(model, "healthy");
     const bool model_ok = cJSON_IsTrue(healthy);
-    snprintf(model_text, sizeof(model_text), "%s   RUN %.0f  WAIT %.0f  KV %.0f%%\nTOK/s  IN %.0f  OUT %.0f",
-             model_ok ? "MODEL ONLINE" : "MODEL DOWN",
+    snprintf(model_metrics_text, sizeof(model_metrics_text), "RUN %.0f  WAIT %.0f\nKV %.0f%%\nIN %.0f  OUT %.0f tok/s",
              json_number(model, "running", 0), json_number(model, "waiting", 0),
              json_number(model, "kv_pct", 0), json_number(model, "prompt_tps", 0),
              json_number(model, "generation_tps", 0));
@@ -166,11 +251,14 @@ static void update_dashboard(const char *json)
     if (lvgl_port_lock(1000)) {
         lv_label_set_text(head_label, head_text);
         lv_label_set_text(worker_label, worker_text);
-        lv_label_set_text(model_label, model_text);
-        lv_obj_set_style_text_color(model_label,
+        lv_label_set_text(model_state_label, model_ok ? "MODEL ONLINE" : "MODEL DOWN");
+        lv_label_set_text(model_metrics_label, model_metrics_text);
+        lv_obj_set_style_text_color(model_state_label,
                                     model_ok ? lv_color_hex(0x7DE2D1) : lv_color_hex(0xFF6B6B), 0);
-        lv_label_set_text(footer_label, footer_text);
-        lv_obj_set_style_text_color(footer_label, lv_color_hex(0x8BA8B7), 0);
+        lv_label_set_text(system_footer_label, footer_text);
+        lv_label_set_text(model_footer_label, footer_text);
+        lv_obj_set_style_text_color(system_footer_label, lv_color_hex(0x8BA8B7), 0);
+        lv_obj_set_style_text_color(model_footer_label, lv_color_hex(0x8BA8B7), 0);
         lvgl_port_unlock();
     }
     cJSON_Delete(root);
