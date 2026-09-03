@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>GB10 Cluster Display</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body {
+      display: grid;
+      place-items: center;
+      background: #03080c;
+      color: #e6f1f5;
+      font-family: Montserrat, Arial, sans-serif;
+    }
+    #stage { position: relative; width: 320px; height: 172px; }
+    #screen {
+      position: absolute;
+      inset: 0;
+      width: 320px;
+      height: 172px;
+      overflow: hidden;
+      transform-origin: top left;
+      background: #091a24;
+      letter-spacing: 0;
+    }
+    .title {
+      position: absolute;
+      left: 8px;
+      top: 3px;
+      color: #7de2d1;
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 24px;
+    }
+    .mode {
+      position: absolute;
+      right: 8px;
+      top: 7px;
+      color: #8ba8b7;
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 17px;
+    }
+    .panel {
+      position: absolute;
+      padding: 7px;
+      overflow: hidden;
+      border: 1px solid #315568;
+      border-radius: 4px;
+      background: #172b3a;
+      font-size: 16px;
+      font-weight: 600;
+      line-height: 17px;
+      white-space: pre;
+    }
+    #head { left: 5px; top: 29px; width: 153px; height: 65px; }
+    #worker { left: 162px; top: 29px; width: 153px; height: 65px; }
+    #model { left: 5px; top: 98px; width: 310px; height: 49px; font-size: 14px; }
+    #model.online { color: #7de2d1; }
+    #model.offline { color: #ff6b6b; }
+    #footer {
+      position: absolute;
+      right: 8px;
+      bottom: 5px;
+      width: 304px;
+      overflow: hidden;
+      color: #8ba8b7;
+      font-size: 14px;
+      line-height: 17px;
+      text-align: right;
+      white-space: nowrap;
+    }
+    #footer.error { color: #ffb86b; }
+  </style>
+</head>
+<body>
+  <main id="stage" aria-label="Live mirror of the GB10 cluster LCD">
+    <section id="screen" aria-live="polite">
+      <div class="title">GB10 CLUSTER</div>
+      <div class="mode">DEEPSEEK V4</div>
+      <div class="panel" id="head">Waiting...</div>
+      <div class="panel" id="worker">Waiting...</div>
+      <div class="panel offline" id="model">MODEL DOWN</div>
+      <div id="footer">Web: connecting</div>
+    </section>
+  </main>
+  <script>
+    const stage = document.getElementById('stage');
+    const screen = document.getElementById('screen');
+    const head = document.getElementById('head');
+    const worker = document.getElementById('worker');
+    const model = document.getElementById('model');
+    const footer = document.getElementById('footer');
+
+    function fitScreen() {
+      const scale = Math.min((innerWidth - 24) / 320, (innerHeight - 24) / 172, 4);
+      stage.style.width = `${320 * scale}px`;
+      stage.style.height = `${172 * scale}px`;
+      screen.style.transform = `scale(${scale})`;
+    }
+
+    function number(value, digits = 0) {
+      return Number.isFinite(value) ? value.toFixed(digits) : '-';
+    }
+
+    function hostText(name, value) {
+      if (!value) return `${name}\nUNAVAILABLE`;
+      return `${name}  ${number(value.temp_c)} C\n` +
+        `GPU ${number(value.gpu_util_pct)}%  L ${number(value.load1, 1)}\n` +
+        `MEM ${number(value.mem_used_pct)}%  ${number(value.power_w)} W`;
+    }
+
+    function render(data) {
+      head.textContent = hostText('HEAD', data.head);
+      worker.textContent = hostText('WORKER', data.worker);
+      const value = data.model || {};
+      const online = value.healthy === true;
+      model.className = `panel ${online ? 'online' : 'offline'}`;
+      model.textContent = `${online ? 'MODEL ONLINE' : 'MODEL DOWN'}   ` +
+        `RUN ${number(value.running)}  WAIT ${number(value.waiting)}  KV ${number(value.kv_pct)}%\n` +
+        `TOK/s  IN ${number(value.prompt_tps)}  OUT ${number(value.generation_tps)}`;
+      footer.className = '';
+      footer.textContent = `WEB LIVE  Updated ${data.updated || '--:--:--'}`;
+    }
+
+    async function refresh() {
+      try {
+        const response = await fetch('/status', {cache: 'no-store'});
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        render(await response.json());
+      } catch (error) {
+        footer.className = 'error';
+        footer.textContent = 'Status endpoint unreachable';
+      }
+    }
+
+    addEventListener('resize', fitScreen);
+    fitScreen();
+    refresh();
+    setInterval(refresh, 2000);
+  </script>
+</body>
+</html>

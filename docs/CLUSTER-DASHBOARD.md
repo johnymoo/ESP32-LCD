@@ -25,6 +25,18 @@ Wi-Fi credentials live only in the ignored file
 `firmware/touch-demo/main/wifi_credentials.h`. The tracked
 `wifi_credentials.example.h` documents the required defines.
 
+## Web display mirror
+
+Open the following URL from the LAN:
+
+```text
+http://192.168.88.181:9108/
+```
+
+The page reproduces the complete 320 x 172 LCD layout, scales it to fit the
+browser viewport, and refreshes the same status data every two seconds. It has
+no external assets or build dependencies.
+
 ## Service operations
 
 ```bash

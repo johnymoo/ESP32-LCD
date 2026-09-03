@@ -8,10 +8,13 @@ import threading
 import time
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import urlparse
 
 WORKER = "admin@192.168.88.198"
 METRICS_URL = "http://127.0.0.1:8890/metrics"
 MODEL_NAME = "deepseek-v4-flash-0731"
+DASHBOARD_PATH = Path(__file__).with_name("dashboard.html")
 
 _cache_lock = threading.Lock()
 _cache_time = 0.0
@@ -166,18 +169,50 @@ def collect():
 
 
 class Handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        if self.path not in {"/status", "/health"}:
-            self.send_error(404)
-            return
-        payload = collect() if self.path == "/status" else {"ok": True}
-        body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    def send_headers(self, body, content_type):
         self.send_response(200)
-        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Type", content_type)
         self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
+
+    def send_body(self, body, content_type):
+        self.send_headers(body, content_type)
         self.wfile.write(body)
+
+    def do_HEAD(self):
+        path = urlparse(self.path).path
+        if path in {"/", "/index.html"}:
+            try:
+                body = DASHBOARD_PATH.read_bytes()
+            except OSError:
+                self.send_error(503, "Dashboard unavailable")
+                return
+            self.send_headers(body, "text/html; charset=utf-8")
+            return
+        if path == "/health":
+            body = b'{"ok":true}'
+            self.send_headers(body, "application/json")
+            return
+        self.send_error(404)
+
+    def do_GET(self):
+        path = urlparse(self.path).path
+        if path in {"/", "/index.html"}:
+            try:
+                body = DASHBOARD_PATH.read_bytes()
+            except OSError:
+                self.send_error(503, "Dashboard unavailable")
+                return
+            self.send_body(body, "text/html; charset=utf-8")
+            return
+        if path not in {"/status", "/health"}:
+            self.send_error(404)
+            return
+        payload = collect() if path == "/status" else {"ok": True}
+        body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        self.send_body(body, "application/json")
 
     def log_message(self, fmt, *args):
         return
