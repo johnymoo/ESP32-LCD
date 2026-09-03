@@ -28,7 +28,7 @@
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT BIT1
 #define WIFI_MAX_RETRY 10
-#define PAGE_ROTATION_MS 5000
+#define PAGE_ROTATION_MS 10000
 
 static const char *TAG = "cluster_display";
 

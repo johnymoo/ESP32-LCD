@@ -21,7 +21,7 @@ The primary application is `firmware/touch-demo`. It initializes the JD9853
 LCD and AXS5106L touch controller through the vendor BSP, renders a 320 x 172
 landscape GB10 cluster dashboard, joins Wi-Fi, and refreshes the cluster status
 endpoint every five seconds. System load and model inference use separate,
-large-text pages that rotate every five seconds; touching the display advances
+large-text pages that rotate every ten seconds; touching the display advances
 immediately to the next page. The companion Web mirror is served from
 `http://192.168.88.181:9108/`.
 

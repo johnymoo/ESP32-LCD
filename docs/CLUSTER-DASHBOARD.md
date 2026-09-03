@@ -31,8 +31,8 @@ two pages:
 - `MODEL INFERENCE` shows service health, running and waiting requests, KV
   cache use, and prompt/generation token rates.
 
-The firmware advances to the next page every five seconds. A tap anywhere on
-the active page advances immediately and resets the five-second page timer.
+The firmware advances to the next page every ten seconds. A tap anywhere on
+the active page advances immediately and resets the ten-second page timer.
 
 Wi-Fi credentials live only in the ignored file
 `firmware/touch-demo/main/wifi_credentials.h`. The tracked
@@ -48,7 +48,7 @@ http://192.168.88.181:9108/
 
 The page reproduces both 320 x 172 LCD pages, scales them to fit the browser
 viewport, and refreshes the same status data every two seconds. It follows the
-same five-second rotation and supports click or touch to advance. It has no
+same ten-second rotation and supports click or touch to advance. It has no
 external assets or build dependencies.
 
 ## Service operations

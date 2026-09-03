@@ -166,7 +166,7 @@ IN 0  OUT 0 tok/s</div>
 
     function scheduleNextPage() {
       clearInterval(pageTimer);
-      pageTimer = setInterval(() => showPage((currentPage + 1) % pages.length), 5000);
+      pageTimer = setInterval(() => showPage((currentPage + 1) % pages.length), 10000);
     }
 
     function nextPage() {
