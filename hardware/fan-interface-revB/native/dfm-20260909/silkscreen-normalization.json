@@ -1,0 +1,7 @@
+{
+  "board_silk_segments": 36,
+  "minimum_stroke_mm": 0.2,
+  "clearance_target_mm": 0.2,
+  "original_outlines": "assembly layers",
+  "limits": "Verify layer remapping and text orientation in fresh export; re-run DRC/DFM."
+}

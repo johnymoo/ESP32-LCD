@@ -85,8 +85,8 @@ BOM云表46.41元、购物车47.03元、未填地址确认页47.66元，均不�
 
 ## 证据和交接边界
 
-主要项目证据路径（完整硬件迁移仍在单独处理）：`hardware/fan-interface-revB/design-inputs.md`、`display-pinout.md`、`local-design-workflow.md`；DFM5内的 `order-readiness.md`、`cpl-jlc-angle-audit.json`、`hand-assembly.md`、`smt-order-status.md`、`SHA256SUMS`；最新状态在发布目录外的 `retail-order-20260909.md`。
+主要项目证据见[硬件工程入口](../hardware/README.md)：`hardware/fan-interface-revB/design-inputs.md`、`display-pinout.md`、`local-design-workflow.md`；DFM5内的 `order-readiness.md`、`cpl-jlc-angle-audit.json`、`hand-assembly.md`、`smt-order-status.md`、`SHA256SUMS`；最新状态在发布目录外的 `retail-order-20260909.md`。
 
-本地硬件迁移到ESP32仓库后，Git隐私钩子把历史EDA坐标小数/时间戳识别成账号，拒绝了整批提交。未套用会破坏工程的脱敏、未绕过钩子。本次skill与复盘独立提交，不能因此声称历史硬件文件已全部发布。
+本地硬件迁移到ESP32仓库后，Git隐私钩子曾把历史EDA坐标小数/时间戳识别成账号，拒绝整批提交，因此skill与复盘先独立发布。2026-09-10用户知晓该问题后明确要求补交PCB设计；完成数字命中审查后，使用仅针对本次提交的钩子例外，把完整硬件工程补入同一PR。未套用破坏坐标的脱敏补丁，未修改全局检查设置；48项DFM5发布文件仍通过原SHA256SUMS校验。过程见[迁移核对](../hardware/import-review-20260910.md)。
 
 下一实物阶段：厂方生产稿确认；到货清点和机械试插；先焊一片，断电短路/极性检查、限流12V上电、再接风扇和屏；调速/测速及通信超时回退另做固件和硬件联调。Rev C继续保留为后备需求。

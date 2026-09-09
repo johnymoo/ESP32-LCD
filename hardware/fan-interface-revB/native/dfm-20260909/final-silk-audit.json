@@ -1,0 +1,14 @@
+{
+  "top": {
+    "minimum_solder_opening_clearance_mm": 0.27318,
+    "minimum_drill_clearance_mm": 0.36606901804454167,
+    "silk_primitives_with_mask_clearance_below_0_18": 0,
+    "silk_primitives_with_hole_clearance_below_0_18": 0
+  },
+  "bottom": {
+    "minimum_solder_opening_clearance_mm": 0.20533999999999789,
+    "minimum_drill_clearance_mm": 0.2098306559861553,
+    "silk_primitives_with_mask_clearance_below_0_18": 0,
+    "silk_primitives_with_hole_clearance_below_0_18": 0
+  }
+}

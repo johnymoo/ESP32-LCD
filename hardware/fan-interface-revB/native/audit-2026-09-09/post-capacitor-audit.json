@@ -1,0 +1,237 @@
+{
+  "source": "/Users/chris/project/Nvidia-DGX/dual-gb10-enclosure/electronics/fan-interface-revB/native/audit-2026-09-09/post-capacitor-stage/PCB1.epru",
+  "errors": [],
+  "electrical_pin_count": 40,
+  "socket_spacing_mm": 17.00000156,
+  "holes_xy_radius_mm": [
+    [
+      2.75,
+      8.835,
+      1.1
+    ],
+    [
+      2.75,
+      26.615,
+      1.1
+    ],
+    [
+      41.75,
+      8.835,
+      1.1
+    ],
+    [
+      41.75,
+      26.615,
+      1.1
+    ]
+  ],
+  "record_counts": {
+    "DOCHEAD": 1,
+    "META": 1,
+    "PRIMITIVE": 37,
+    "CANVAS": 1,
+    "LAYER": 62,
+    "LAYER_PHYS": 9,
+    "ACTIVE_LAYER": 1,
+    "RULE_TEMPLATE": 1,
+    "RULE": 17,
+    "SILK_OPTS": 2,
+    "PREFERENCE": 1,
+    "PANELIZE": 1,
+    "NET": 13,
+    "POURED": 3,
+    "ELE_PLACEHOLDER": 15,
+    "COMPONENT": 16,
+    "PAD_NET": 56,
+    "ATTR": 48,
+    "RULE_SELECTOR": 12,
+    "POLY": 1,
+    "FILL": 4,
+    "REGION": 11,
+    "POUR": 2,
+    "LINE": 88,
+    "VIA": 2
+  },
+  "bom": [
+    {
+      "ref": "C1",
+      "lcsc": "C970685",
+      "part": "RVT1E101M0607 100UF 25V",
+      "side": "bottom",
+      "xy_mm": [
+        18.0006,
+        21.5009
+      ],
+      "angle_deg": 0
+    },
+    {
+      "ref": "C2",
+      "lcsc": "C14663",
+      "part": "CC0603KRX7R9BB104",
+      "side": "bottom",
+      "xy_mm": [
+        24.4994,
+        20.5001
+      ],
+      "angle_deg": 0
+    },
+    {
+      "ref": "D1",
+      "lcsc": "C8678",
+      "part": "SS34",
+      "side": "bottom",
+      "xy_mm": [
+        18.0,
+        16.0
+      ],
+      "angle_deg": 0
+    },
+    {
+      "ref": "F1",
+      "lcsc": "C46641031",
+      "part": "SMD1206-150-16",
+      "side": "bottom",
+      "xy_mm": [
+        15.0,
+        12.5
+      ],
+      "angle_deg": 0
+    },
+    {
+      "ref": "J1",
+      "lcsc": "C381116",
+      "part": "DC-005-5A-2.0",
+      "side": "bottom",
+      "xy_mm": [
+        10.6,
+        18.0
+      ],
+      "angle_deg": 0
+    },
+    {
+      "ref": "J2",
+      "lcsc": "C240840",
+      "part": "470531000",
+      "side": "bottom",
+      "xy_mm": [
+        21.0,
+        4.0
+      ],
+      "angle_deg": 0
+    },
+    {
+      "ref": "J3",
+      "lcsc": "C240840",
+      "part": "470531000",
+      "side": "bottom",
+      "xy_mm": [
+        34.0,
+        4.0
+      ],
+      "angle_deg": 0
+    },
+    {
+      "ref": "JDISP1",
+      "lcsc": "C41417323",
+      "part": "HX PM2.54-1x11P ZC",
+      "side": "top",
+      "xy_mm": [
+        25.3,
+        26.23
+      ],
+      "angle_deg": 0
+    },
+    {
+      "ref": "JDISP2",
+      "lcsc": "C41417323",
+      "part": "HX PM2.54-1x11P ZC",
+      "side": "top",
+      "xy_mm": [
+        25.3,
+        9.23
+      ],
+      "angle_deg": 0
+    },
+    {
+      "ref": "Q1",
+      "lcsc": "C20917",
+      "part": "AO3400A",
+      "side": "bottom",
+      "xy_mm": [
+        28.0,
+        20.0
+      ],
+      "angle_deg": 0
+    },
+    {
+      "ref": "R1",
+      "lcsc": "C22962",
+      "part": "0603WAF2200T5E",
+      "side": "bottom",
+      "xy_mm": [
+        26.0,
+        23.5
+      ],
+      "angle_deg": 0
+    },
+    {
+      "ref": "R2",
+      "lcsc": "C25803",
+      "part": "0603WAF1003T5E",
+      "side": "bottom",
+      "xy_mm": [
+        31.5,
+        20.0
+      ],
+      "angle_deg": 0
+    },
+    {
+      "ref": "R3",
+      "lcsc": "C22962",
+      "part": "0603WAF2200T5E",
+      "side": "bottom",
+      "xy_mm": [
+        23.0,
+        13.5
+      ],
+      "angle_deg": 0
+    },
+    {
+      "ref": "R4",
+      "lcsc": "C23162",
+      "part": "0603WAF4701T5E",
+      "side": "bottom",
+      "xy_mm": [
+        26.0,
+        13.5
+      ],
+      "angle_deg": 0
+    },
+    {
+      "ref": "R5",
+      "lcsc": "C22962",
+      "part": "0603WAF2200T5E",
+      "side": "bottom",
+      "xy_mm": [
+        32.0,
+        13.5
+      ],
+      "angle_deg": 0
+    },
+    {
+      "ref": "R6",
+      "lcsc": "C23162",
+      "part": "0603WAF4701T5E",
+      "side": "bottom",
+      "xy_mm": [
+        35.0,
+        13.5
+      ],
+      "angle_deg": 0
+    }
+  ],
+  "limits": [
+    "Does not replace DRC, DFM or electrical fan compatibility checks",
+    "Fuse/current and fan tach-output acceptance not yet frozen"
+  ]
+}
