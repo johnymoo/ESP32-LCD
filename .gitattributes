@@ -1,0 +1,3 @@
+# Preserve byte-for-byte EDA exports and downloaded vendor references.
+hardware/**/Gerber_* whitespace=-blank-at-eof
+hardware/fan-interface-revB/reference/waveshare/HARDWARE.md whitespace=-blank-at-eof

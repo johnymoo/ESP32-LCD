@@ -1,13 +1,5 @@
 # ESP32-S3 Touch LCD 1.47
 
-## Fan interface PCB
-
-The display's direct-plug fan carrier PCB is maintained here, separately from
-the DGX enclosure repository. See [hardware](hardware/README.md) for Rev B
-manufacturing files, the original BOM, hand assembly and purchasing records.
-[Rev C #1](https://github.com/johnymoo/ESP32-LCD/issues/1) records a deferred
-hand-soldering redesign; try the approved Rev B board first.
-
 Development workspace for the Waveshare ESP32-S3-Touch-LCD-1.47 connected to
 `gb10-2`. The repository is also a reusable baseline for adapting similar
 ESP32-S3 touch displays after their board-specific BSP, pin map, panel geometry,

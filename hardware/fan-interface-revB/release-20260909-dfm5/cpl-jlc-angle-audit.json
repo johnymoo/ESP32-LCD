@@ -1,0 +1,35 @@
+{
+  "input": "GB10_Fan_RevB_CPL_20260909.csv",
+  "output": "GB10_Fan_RevB_CPL_JLC_20260909.csv",
+  "edits": [
+    {
+      "designator": "C1",
+      "cell": "L4",
+      "before": "0",
+      "after": "180"
+    },
+    {
+      "designator": "D1",
+      "cell": "L6",
+      "before": "0",
+      "after": "180"
+    },
+    {
+      "designator": "J1",
+      "cell": "L13",
+      "before": "0",
+      "after": "180"
+    },
+    {
+      "designator": "Q1",
+      "cell": "L16",
+      "before": "0",
+      "after": "180"
+    }
+  ],
+  "encoding": "UTF-16LE",
+  "delimiter": "TAB",
+  "lineEnding": "CRLF",
+  "otherBytesUnchanged": true,
+  "errors": []
+}

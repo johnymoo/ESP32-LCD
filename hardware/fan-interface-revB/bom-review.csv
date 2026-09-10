@@ -1,0 +1,15 @@
+Reference,Function,Value,Footprint/connection,Notes
+J1,12V input,DC5521 or locking 2P,TH,center positive; independent fan supply
+F1,Input protection,resettable fuse,TH or fuse footprint,size after fan startup current check
+D1,Reverse polarity,SS34 or suitable Schottky,SMA/SMB,voltage/current margin for 12V fan rail
+C1,Motor rail bulk,100uF >=25V,TH or large SMD,place near fan connectors
+C2,Motor rail bypass,100nF >=25V,0603/0805,place near fan connectors
+J2,Fan 1,4-pin PWM fan connector,4P keyed/latching,1=GND 2=FAN12 3=TACH 4=PWM
+J3,Fan 2,4-pin PWM fan connector,4P keyed/latching,1=GND 2=FAN12 3=TACH 4=PWM
+Q1,Shared PWM sink,2N7002 or 2N7000,SOT-23 or TH,open-drain low-side PWM bus
+R1,Gate resistor,1k,0603,ESP PWM to Q1 gate
+R2,Gate pulldown,100k,0603,Q1 gate to GND
+R3/R5,Tach series,220R,0603,one per fan tach
+R4/R6,Tach pullup,4.7k,0603,one per tach to ESP32 3V3
+JDISP1,Display header row A,1x11 2.54mm female,TH,plug directly into ESP32 display board
+JDISP2,Display header row B,1x11 2.54mm female,TH,17.00mm row center distance

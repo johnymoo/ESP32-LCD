@@ -1,0 +1,4 @@
+interface:
+  display_name: "嘉立创制板与采购"
+  short_description: "从接口与机械证据到原理图、PCB校核、制造文件及嘉立创订单核对"
+  default_prompt: "使用 $jlc-pcb-fabrication，基于当前项目资料准备可在嘉立创制板的工程和采购清单，并核对已有订单状态。"
