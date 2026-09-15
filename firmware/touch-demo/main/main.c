@@ -12,6 +12,7 @@
 #include "esp_log.h"
 #include "esp_lvgl_port.h"
 #include "esp_netif.h"
+#include "esp_timer.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
@@ -101,12 +102,44 @@ static void fan_diagnostic_task(void *argument)
     static const uint32_t gpio_high_percent[] = {0, 50, 0};
     static const char *phase_name[] = {"FULL_SPEED", "HALF_SPEED", "FULL_SPEED"};
     unsigned phase = 0;
-    uint32_t previous_tach1 = 0;
-    uint32_t previous_tach2 = 0;
+    uint32_t previous_tach1;
+    uint32_t previous_tach2;
 
     fan_set_gpio_duty(gpio_high_percent[phase]);
     ESP_LOGI(TAG, "fan diagnostic: PWM %s (GPIO1 high=%" PRIu32 "%%; fan duty is inverted)",
              phase_name[phase], gpio_high_percent[phase]);
+
+    /* Release the GPIO so the carrier's external pulldown can keep Q1 off.
+     * gpio_reset_pin() enables an internal pull-up, which must be removed.
+     * This requests full speed; it does not prove the fan PWM bus is high. */
+    ESP_ERROR_CHECK(ledc_stop(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0));
+    ESP_ERROR_CHECK(gpio_reset_pin(FAN_PWM_GPIO));
+    ESP_ERROR_CHECK(gpio_set_pull_mode(FAN_PWM_GPIO, GPIO_FLOATING));
+    ESP_LOGI(TAG, "fan diagnostic: PWM RELEASE (GPIO1 high impedance; Q1 gate pulldown)");
+    vTaskDelay(pdMS_TO_TICKS(5000));
+    ESP_LOGI(TAG, "fan diagnostic: release levels tach1=%d tach2=%d",
+             gpio_get_level(FAN_TACH1_GPIO), gpio_get_level(FAN_TACH2_GPIO));
+
+    const ledc_channel_config_t channel_config = {
+        .gpio_num = FAN_PWM_GPIO,
+        .speed_mode = LEDC_LOW_SPEED_MODE,
+        .channel = LEDC_CHANNEL_0,
+        .intr_type = LEDC_INTR_DISABLE,
+        .timer_sel = LEDC_TIMER_0,
+        .duty = 0,
+        .hpoint = 0,
+        .flags = {.output_invert = 0},
+    };
+    ESP_ERROR_CHECK(ledc_channel_config(&channel_config));
+    fan_set_gpio_duty(0);
+    ESP_LOGI(TAG, "fan diagnostic: PWM FULL_SPEED (GPIO1 low)");
+
+    /* Exclude the release interval from the first speed sample. */
+    portENTER_CRITICAL(&fan_tach_lock);
+    previous_tach1 = fan_tach1_pulses;
+    previous_tach2 = fan_tach2_pulses;
+    int64_t previous_sample_us = esp_timer_get_time();
+    portEXIT_CRITICAL(&fan_tach_lock);
 
     while (true) {
         vTaskDelay(pdMS_TO_TICKS(5000));
@@ -115,23 +148,30 @@ static void fan_diagnostic_task(void *argument)
         portENTER_CRITICAL(&fan_tach_lock);
         tach1 = fan_tach1_pulses;
         tach2 = fan_tach2_pulses;
+        const int64_t sample_us = esp_timer_get_time();
         portEXIT_CRITICAL(&fan_tach_lock);
 
+        const uint64_t elapsed_us = (uint64_t)(sample_us - previous_sample_us);
         const uint32_t delta1 = tach1 - previous_tach1;
         const uint32_t delta2 = tach2 - previous_tach2;
         previous_tach1 = tach1;
         previous_tach2 = tach2;
-        const uint32_t rpm1 = (delta1 * 120U) / FAN_PULSES_PER_REV;
-        const uint32_t rpm2 = (delta2 * 120U) / FAN_PULSES_PER_REV;
+        previous_sample_us = sample_us;
+        const uint32_t rpm1 = ((uint64_t)delta1 * 60000000ULL) /
+                             (elapsed_us * FAN_PULSES_PER_REV);
+        const uint32_t rpm2 = ((uint64_t)delta2 * 60000000ULL) /
+                             (elapsed_us * FAN_PULSES_PER_REV);
         ESP_LOGI(TAG, "fan diagnostic: phase=%s tach1=%" PRIu32 " pulses rpm1=%" PRIu32
                       " level=%d, tach2=%" PRIu32 " pulses rpm2=%" PRIu32 " level=%d, pwm_level=%d",
                  phase_name[phase], delta1, rpm1, gpio_get_level(FAN_TACH1_GPIO),
                  delta2, rpm2, gpio_get_level(FAN_TACH2_GPIO), gpio_get_level(FAN_PWM_GPIO));
 
-        phase = (phase + 1) % (sizeof(gpio_high_percent) / sizeof(gpio_high_percent[0]));
-        fan_set_gpio_duty(gpio_high_percent[phase]);
-        ESP_LOGI(TAG, "fan diagnostic: PWM %s (GPIO1 high=%" PRIu32 "%%; fan duty is inverted)",
-                 phase_name[phase], gpio_high_percent[phase]);
+        if (phase + 1 < sizeof(gpio_high_percent) / sizeof(gpio_high_percent[0])) {
+            phase++;
+            fan_set_gpio_duty(gpio_high_percent[phase]);
+            ESP_LOGI(TAG, "fan diagnostic: PWM %s (GPIO1 high=%" PRIu32 "%%; fan duty is inverted)",
+                     phase_name[phase], gpio_high_percent[phase]);
+        }
     }
 }
 
