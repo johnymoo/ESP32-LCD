@@ -3,8 +3,6 @@
 #include <string.h>
 
 #include "cJSON.h"
-#include "driver/gpio.h"
-#include "driver/ledc.h"
 #include "esp_check.h"
 #include "esp_err.h"
 #include "esp_event.h"
@@ -12,7 +10,6 @@
 #include "esp_log.h"
 #include "esp_lvgl_port.h"
 #include "esp_netif.h"
-#include "esp_timer.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
@@ -36,17 +33,6 @@
 #define MIN_PAGE_ROTATION_MS 1000
 #define MAX_PAGE_ROTATION_MS 300000
 
-/* Rev B fan carrier: GPIO1 drives the shared open-drain PWM sink.  GPIO2 and
- * GPIO4 are independent open-collector tach inputs.  The carrier inverts the
- * PWM sense: GPIO1 high turns the MOSFET on and pulls the fan PWM low. */
-#define FAN_PWM_GPIO GPIO_NUM_1
-#define FAN_TACH1_GPIO GPIO_NUM_2
-#define FAN_TACH2_GPIO GPIO_NUM_4
-#define FAN_PWM_FREQ_HZ 25000
-#define FAN_PWM_RESOLUTION LEDC_TIMER_10_BIT
-#define FAN_PWM_MAX_DUTY ((1U << 10) - 1U)
-#define FAN_PULSES_PER_REV 2U
-
 static const char *TAG = "cluster_display";
 
 static esp_lcd_panel_io_handle_t io_handle;
@@ -68,152 +54,6 @@ static lv_obj_t *model_footer_label;
 static lv_timer_t *page_timer;
 static unsigned current_page;
 static uint32_t page_rotation_ms = DEFAULT_PAGE_ROTATION_MS;
-static volatile uint32_t fan_tach1_pulses;
-static volatile uint32_t fan_tach2_pulses;
-static portMUX_TYPE fan_tach_lock = portMUX_INITIALIZER_UNLOCKED;
-
-static void IRAM_ATTR fan_tach_isr(void *argument)
-{
-    const gpio_num_t gpio = (gpio_num_t)(intptr_t)argument;
-    portENTER_CRITICAL_ISR(&fan_tach_lock);
-    if (gpio == FAN_TACH1_GPIO) {
-        fan_tach1_pulses++;
-    } else if (gpio == FAN_TACH2_GPIO) {
-        fan_tach2_pulses++;
-    }
-    portEXIT_CRITICAL_ISR(&fan_tach_lock);
-}
-
-static void fan_set_gpio_duty(uint32_t gpio_high_percent)
-{
-    if (gpio_high_percent > 100) {
-        gpio_high_percent = 100;
-    }
-    const uint32_t duty = (FAN_PWM_MAX_DUTY * gpio_high_percent) / 100U;
-    ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, duty));
-    ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));
-}
-
-static void fan_diagnostic_task(void *argument)
-{
-    /* Exercise full speed and half speed once, then leave the carrier at
-     * full speed while the board is under test.  Do not repeatedly stop a
-     * fan that may be cooling the host. */
-    static const uint32_t gpio_high_percent[] = {0, 50, 0};
-    static const char *phase_name[] = {"FULL_SPEED", "HALF_SPEED", "FULL_SPEED"};
-    unsigned phase = 0;
-    uint32_t previous_tach1;
-    uint32_t previous_tach2;
-
-    fan_set_gpio_duty(gpio_high_percent[phase]);
-    ESP_LOGI(TAG, "fan diagnostic: PWM %s (GPIO1 high=%" PRIu32 "%%; fan duty is inverted)",
-             phase_name[phase], gpio_high_percent[phase]);
-
-    /* Release the GPIO so the carrier's external pulldown can keep Q1 off.
-     * gpio_reset_pin() enables an internal pull-up, which must be removed.
-     * This requests full speed; it does not prove the fan PWM bus is high. */
-    ESP_ERROR_CHECK(ledc_stop(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0));
-    ESP_ERROR_CHECK(gpio_reset_pin(FAN_PWM_GPIO));
-    ESP_ERROR_CHECK(gpio_set_pull_mode(FAN_PWM_GPIO, GPIO_FLOATING));
-    ESP_LOGI(TAG, "fan diagnostic: PWM RELEASE (GPIO1 high impedance; Q1 gate pulldown)");
-    vTaskDelay(pdMS_TO_TICKS(5000));
-    ESP_LOGI(TAG, "fan diagnostic: release levels tach1=%d tach2=%d",
-             gpio_get_level(FAN_TACH1_GPIO), gpio_get_level(FAN_TACH2_GPIO));
-
-    const ledc_channel_config_t channel_config = {
-        .gpio_num = FAN_PWM_GPIO,
-        .speed_mode = LEDC_LOW_SPEED_MODE,
-        .channel = LEDC_CHANNEL_0,
-        .intr_type = LEDC_INTR_DISABLE,
-        .timer_sel = LEDC_TIMER_0,
-        .duty = 0,
-        .hpoint = 0,
-        .flags = {.output_invert = 0},
-    };
-    ESP_ERROR_CHECK(ledc_channel_config(&channel_config));
-    fan_set_gpio_duty(0);
-    ESP_LOGI(TAG, "fan diagnostic: PWM FULL_SPEED (GPIO1 low)");
-
-    /* Exclude the release interval from the first speed sample. */
-    portENTER_CRITICAL(&fan_tach_lock);
-    previous_tach1 = fan_tach1_pulses;
-    previous_tach2 = fan_tach2_pulses;
-    int64_t previous_sample_us = esp_timer_get_time();
-    portEXIT_CRITICAL(&fan_tach_lock);
-
-    while (true) {
-        vTaskDelay(pdMS_TO_TICKS(5000));
-        uint32_t tach1;
-        uint32_t tach2;
-        portENTER_CRITICAL(&fan_tach_lock);
-        tach1 = fan_tach1_pulses;
-        tach2 = fan_tach2_pulses;
-        const int64_t sample_us = esp_timer_get_time();
-        portEXIT_CRITICAL(&fan_tach_lock);
-
-        const uint64_t elapsed_us = (uint64_t)(sample_us - previous_sample_us);
-        const uint32_t delta1 = tach1 - previous_tach1;
-        const uint32_t delta2 = tach2 - previous_tach2;
-        previous_tach1 = tach1;
-        previous_tach2 = tach2;
-        previous_sample_us = sample_us;
-        const uint32_t rpm1 = ((uint64_t)delta1 * 60000000ULL) /
-                             (elapsed_us * FAN_PULSES_PER_REV);
-        const uint32_t rpm2 = ((uint64_t)delta2 * 60000000ULL) /
-                             (elapsed_us * FAN_PULSES_PER_REV);
-        ESP_LOGI(TAG, "fan diagnostic: phase=%s tach1=%" PRIu32 " pulses rpm1=%" PRIu32
-                      " level=%d, tach2=%" PRIu32 " pulses rpm2=%" PRIu32 " level=%d, pwm_level=%d",
-                 phase_name[phase], delta1, rpm1, gpio_get_level(FAN_TACH1_GPIO),
-                 delta2, rpm2, gpio_get_level(FAN_TACH2_GPIO), gpio_get_level(FAN_PWM_GPIO));
-
-        if (phase + 1 < sizeof(gpio_high_percent) / sizeof(gpio_high_percent[0])) {
-            phase++;
-            fan_set_gpio_duty(gpio_high_percent[phase]);
-            ESP_LOGI(TAG, "fan diagnostic: PWM %s (GPIO1 high=%" PRIu32 "%%; fan duty is inverted)",
-                     phase_name[phase], gpio_high_percent[phase]);
-        }
-    }
-}
-
-static void fan_diagnostic_init(void)
-{
-    const ledc_timer_config_t timer_config = {
-        .speed_mode = LEDC_LOW_SPEED_MODE,
-        .timer_num = LEDC_TIMER_0,
-        .duty_resolution = FAN_PWM_RESOLUTION,
-        .freq_hz = FAN_PWM_FREQ_HZ,
-        .clk_cfg = LEDC_AUTO_CLK,
-    };
-    ESP_ERROR_CHECK(ledc_timer_config(&timer_config));
-
-    const ledc_channel_config_t channel_config = {
-        .gpio_num = FAN_PWM_GPIO,
-        .speed_mode = LEDC_LOW_SPEED_MODE,
-        .channel = LEDC_CHANNEL_0,
-        .intr_type = LEDC_INTR_DISABLE,
-        .timer_sel = LEDC_TIMER_0,
-        .duty = 0,
-        .hpoint = 0,
-        .flags = {.output_invert = 0},
-    };
-    ESP_ERROR_CHECK(ledc_channel_config(&channel_config));
-
-    const gpio_config_t tach_config = {
-        .pin_bit_mask = (1ULL << FAN_TACH1_GPIO) | (1ULL << FAN_TACH2_GPIO),
-        .mode = GPIO_MODE_INPUT,
-        .pull_up_en = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_NEGEDGE,
-    };
-    ESP_ERROR_CHECK(gpio_config(&tach_config));
-    ESP_ERROR_CHECK(gpio_install_isr_service(ESP_INTR_FLAG_IRAM));
-    ESP_ERROR_CHECK(gpio_isr_handler_add(FAN_TACH1_GPIO, fan_tach_isr,
-                                         (void *)(intptr_t)FAN_TACH1_GPIO));
-    ESP_ERROR_CHECK(gpio_isr_handler_add(FAN_TACH2_GPIO, fan_tach_isr,
-                                         (void *)(intptr_t)FAN_TACH2_GPIO));
-    xTaskCreate(fan_diagnostic_task, "fan_diagnostic", 4096, NULL, 5, NULL);
-    ESP_LOGI(TAG, "fan diagnostic initialized: PWM=GPIO1 TACH1=GPIO2 TACH2=GPIO4");
-}
 
 typedef struct {
     char data[2048];
@@ -609,8 +449,6 @@ void app_main(void)
         result = nvs_flash_init();
     }
     ESP_ERROR_CHECK(result);
-
-    fan_diagnostic_init();
 
     i2c_master_bus_handle_t i2c_bus = bsp_i2c_init();
     bsp_display_init(&io_handle, &panel_handle, LCD_H_RES * LCD_DRAW_BUFFER_HEIGHT);

@@ -1,0 +1,19 @@
+ESP32 显示固件恢复记录，<PRIVATE_DATE>
+
+目标设备：gb10-2:/home/admin/project/esp32-s3-touch-1.47
+目标串口：<PRIVATE_URL>
+恢复基线：Git 提交 1811a2d（调试前显示固件）
+源码校验：firmware/touch-demo/main/main.c 与 1811a2d 完全一致
+
+执行结果：
+
+1. 已将恢复后的 main.c 同步到 gb10-2。
+2. ./scripts/build.sh 成功；应用镜像 0x1292a0 字节，分区容量检查通过。
+3. ./scripts/flash.sh 成功；bootloader、应用和分区表均显示 “Hash of data verified”。
+4. 重启监视约 22 秒：
+   - App version: 1811a2d-dirty（远端工作树因同步单文件而标记 dirty）；
+   - LCD、触摸、Wi-Fi 和 cluster dashboard 启动成功；
+   - 出现多次 “cluster status updated” 和一次页面轮换到 model；
+   - 未出现 fan diagnostic、PWM 或 TACH 诊断日志。
+
+结论：ESP32 已恢复到原来的显示固件；风扇诊断固件不再运行。转接板和风扇接线状态未改变。
