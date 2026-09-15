@@ -1,6 +1,6 @@
 ---
 name: jlc-pcb-fabrication
-description: 为嘉立创制板准备或修改简单 PCB，衔接器件选型、原理图、PCB、制造校核、Gerber/BOM/CPL 交付和裸板/散件/SMT 下单核对。适用于嘉立创 EDA 或已有本地 EDA 工程；仅查商品或编写 MCU 固件时不使用。
+description: 用于嘉立创 EDA/PCB 设计、DRC/DFM、Gerber/BOM/CPL 发布或订单准备；仅查商品或编写 MCU 固件时不使用。
 ---
 
 # 嘉立创制板与采购
