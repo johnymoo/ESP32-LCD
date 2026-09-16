@@ -67,9 +67,9 @@
     }
     .host {
       width: 153px;
-      font-size: 20px;
+      font-size: 14px;
       font-weight: 600;
-      line-height: 24px;
+      line-height: 19px;
     }
     #head { left: 5px; }
     #worker { left: 162px; }
@@ -155,12 +155,24 @@ IN 0  OUT 0 tok/s</div>
       return Number.isFinite(value) ? value.toFixed(digits) : '-';
     }
 
+    function formatUptime(seconds) {
+      const total = Math.floor(seconds);
+      const days = Math.floor(total / 86400);
+      const hours = Math.floor((total % 86400) / 3600);
+      const minutes = Math.floor((total % 3600) / 60);
+      if (days >= 2) return `${days}d`;
+      if (hours >= 1) return `${hours + days * 24}h`;
+      return `${minutes}m`;
+    }
+
     function hostText(name, value) {
       if (!value) return `${name}\nUNAVAILABLE`;
-      return `${name} ${number(value.temp_c)}C\n` +
-        `GPU ${number(value.gpu_util_pct)}%\n` +
-        `LOAD ${number(value.load1, 1)}\n` +
-        `RAM ${number(value.mem_used_pct)}% ${number(value.power_w)}W`;
+      const nvme = Number.isFinite(value.nvme_temp_c) ? `${Math.round(value.nvme_temp_c)}C` : '-';
+      const uptime = Number.isFinite(value.uptime_s) ? formatUptime(value.uptime_s) : '-';
+      return `${name} ${number(value.temp_c)}C GPU SOC\n` +
+        `PWR ${number(value.power_w, 1)}W  NVME ${nvme}\n` +
+        `GPU ${number(value.gpu_util_pct)}%  LOAD ${number(value.load1, 1)}\n` +
+        `RAM ${number(value.mem_used_pct)}%  UPTM ${uptime}`;
     }
 
     function showPage(index) {

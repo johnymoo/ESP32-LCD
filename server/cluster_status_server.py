@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import glob
 import json
 import re
 import subprocess
@@ -16,6 +17,15 @@ METRICS_URL = "http://127.0.0.1:8890/metrics"
 MODEL_NAME = "deepseek-v4-flash-0731"
 DASHBOARD_PATH = Path(__file__).with_name("dashboard.html")
 PAGE_ROTATION_MS = 10000
+# Read-only snapshot gathered over the existing worker SSH channel. Sections
+# are separated by --- markers so optional fields cannot shift the parsing.
+WORKER_SNAPSHOT = (
+    "nvidia-smi --query-gpu=temperature.gpu,utilization.gpu,power.draw "
+    "--format=csv,noheader,nounits; echo ---; cat /proc/loadavg; echo ---; "
+    "cat /proc/meminfo; echo ---; "
+    'for h in /sys/class/hwmon/hwmon*; do if [ "$(cat "$h/name" 2>/dev/null)" '
+    '= nvme ]; then cat "$h/temp1_input"; fi; done; echo ---; cat /proc/uptime'
+)
 
 _cache_lock = threading.Lock()
 _cache_time = 0.0
@@ -69,6 +79,27 @@ def mem_used_pct(meminfo):
     return round((total - available) * 100.0 / total, 1)
 
 
+def read_nvme_temp_c():
+    """Composite NVMe temperature from the world-readable hwmon interface."""
+    for hwmon in sorted(glob.glob("/sys/class/hwmon/hwmon*")):
+        try:
+            name = Path(hwmon, "name").read_text(encoding="ascii").strip()
+            if name != "nvme":
+                continue
+            milli = int(Path(hwmon, "temp1_input").read_text(encoding="ascii").strip())
+            return round(milli / 1000.0)
+        except (OSError, ValueError):
+            continue
+    return None
+
+
+def read_uptime_s():
+    try:
+        return int(float(Path("/proc/uptime").read_text(encoding="ascii").split()[0]))
+    except (OSError, ValueError, IndexError):
+        return None
+
+
 def local_host():
     gpu = run([
         "nvidia-smi",
@@ -77,7 +108,13 @@ def local_host():
     ]).splitlines()[0]
     load1 = float(open("/proc/loadavg", encoding="ascii").read().split()[0])
     meminfo = open("/proc/meminfo", encoding="ascii").read()
-    return {**parse_gpu(gpu), "load1": load1, "mem_used_pct": mem_used_pct(meminfo)}
+    return {
+        **parse_gpu(gpu),
+        "load1": load1,
+        "mem_used_pct": mem_used_pct(meminfo),
+        "nvme_temp_c": read_nvme_temp_c(),
+        "uptime_s": read_uptime_s(),
+    }
 
 
 def worker_host():
@@ -86,15 +123,24 @@ def worker_host():
         "-o", "BatchMode=yes",
         "-o", "ConnectTimeout=2",
         WORKER,
-        "nvidia-smi --query-gpu=temperature.gpu,utilization.gpu,power.draw "
-        "--format=csv,noheader,nounits; cat /proc/loadavg; cat /proc/meminfo",
+        WORKER_SNAPSHOT,
     ], timeout=4)
-    lines = output.splitlines()
-    load1 = float(lines[1].split()[0])
+    sections = output.split("---")
+    if len(sections) < 5:
+        raise ValueError(f"unexpected worker snapshot: {output[:80]!r}")
+    lines = sections[0].splitlines()
+    load1 = float(sections[1].split()[0])
+    nvme_temp_c = None
+    nvme_fields = sections[3].split()
+    if nvme_fields:
+        nvme_temp_c = round(int(nvme_fields[0]) / 1000.0)
+    uptime_s = int(float(sections[4].split()[0]))
     return {
         **parse_gpu(lines[0]),
         "load1": load1,
-        "mem_used_pct": mem_used_pct("\n".join(lines[2:])),
+        "mem_used_pct": mem_used_pct(sections[2]),
+        "nvme_temp_c": nvme_temp_c,
+        "uptime_s": uptime_s,
     }
 
 

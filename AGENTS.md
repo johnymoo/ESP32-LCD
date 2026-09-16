@@ -80,9 +80,9 @@ Keep local changes to vendor components small and document why they are needed.
 
 ## Dashboard and status service
 
-The firmware reads `http://192.168.88.181:9108/status` every five seconds. The
-browser mirror is served at `http://192.168.88.181:9108/` and refreshes every
-two seconds. The service is deployed on `gb10` as the user unit
+The firmware reads `http://192.168.88.181:9108/status` every two seconds. The
+browser mirror is served at `http://192.168.88.181:9108/` and refreshes on the
+same cadence. The service is deployed on `gb10` as the user unit
 `cluster-display-status.service`.
 
 The status service is read-only. Do not restart, stop, or reconfigure Qwen,
