@@ -10,3 +10,5 @@ __pycache__/
 *.pyc
 
 /planning/01-raw/
+
+/tmp/

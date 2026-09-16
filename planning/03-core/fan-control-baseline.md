@@ -2,7 +2,10 @@
 
 - `baseline_revision: fan-control-20260916-r3`
 - 权威来源：用户 2026-09-16 明确需求；现有硬件/软件事实来自 `docs/CLUSTER-DASHBOARD.md`、`hardware/fan-interface-revB/display-pinout.md` 及 2026-09-16 实测记录。
-- 状态：`BASELINE_APPROVED`（用户明确要求设计并共同确认界面；推荐的安全边界仍标为待确认）。
+- 状态：`IMPLEMENTED_20260916`（UI 高保真原型经用户逐屏确认后实现；
+  FANCTRL-04 安全边界按原型确认的"故障即全速 + 屏幕故障条 + 重启回自动"
+  落地。FANCTRL-02、FANCTRL-03、FANCTRL-07 的风扇实测项待更换静音风扇后
+  核验，见 `docs/FAN-CONTROL-20260916.md` 遗留清单。）
 
 ## FANCTRL-01
 
