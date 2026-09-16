@@ -1,0 +1,27 @@
+Rev B D1 replacement retest, GB10-2, 2026-09-16.
+
+Setup: independent 12 V connected; ESP32 USB connected; one fan connected to FAN2.
+D1 was replaced before this test. Diagnostic firmware was built and flashed from
+commit 74bdeaa (image size 0x129ec0); flash hash verification passed.
+
+Relevant serial lines:
+
+I (...) cluster_display: fan diagnostic: PWM RELEASE (GPIO1 high impedance; Q1 gate pulldown)
+I (...) cluster_display: fan diagnostic: release levels tach1=1 tach2=1
+I (...) cluster_display: fan diagnostic: PWM FULL_SPEED (GPIO1 low)
+I (...) cluster_display: phase=FULL_SPEED tach1=0 pulses rpm1=0 level=1, tach2=226 pulses rpm2=1356 level=0, pwm_level=0
+I (...) cluster_display: PWM HALF_SPEED (GPIO1 high=50%; fan duty is inverted)
+I (...) cluster_display: phase=HALF_SPEED tach1=0 pulses rpm1=0 level=1, tach2=167 pulses rpm2=999 level=0, pwm_level=0
+I (...) cluster_display: PWM FULL_SPEED (GPIO1 high=0%; fan duty is inverted)
+I (...) cluster_display: phase=FULL_SPEED tach1=0 pulses rpm1=0 level=1, tach2=196 pulses rpm2=1176 level=1, pwm_level=0
+I (...) cluster_display: phase=FULL_SPEED tach1=0 pulses rpm1=0 level=1, tach2=228 pulses rpm2=1368 level=0, pwm_level=0
+
+Interpretation: FAN2 starts and spins; TACH2 produces nonzero pulses; the measured RPM
+decreases under the half-speed command and returns to the full-speed range. FAN1/TACH1
+was intentionally left unconnected in this run. After the diagnostic run, the display
+firmware was restored and flashed successfully. Boot verification reported:
+
+I (...) app_init: App version:      1811a2d-dirty
+I (...) cluster_display: landscape cluster dashboard ready
+
+No fan diagnostic log appeared after restoration.
