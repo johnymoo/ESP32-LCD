@@ -15,6 +15,11 @@
 #define FAN_TACH2_GPIO GPIO_NUM_4
 #define FAN_PWM_FREQ_HZ 25000
 #define FAN_PWM_RESOLUTION LEDC_TIMER_10_BIT
+/* The BSP backlight owns LEDC_TIMER_0/CHANNEL_0 (GPIO46). Configuring the fan
+ * on the same channel made every full-speed request write backlight duty 0
+ * and blank the panel, so the fan PWM keeps a dedicated timer and channel. */
+#define FAN_PWM_TIMER LEDC_TIMER_1
+#define FAN_PWM_CHANNEL LEDC_CHANNEL_1
 #define FAN_PWM_MAX_DUTY ((1U << 10) - 1U)
 #define FAN_PULSES_PER_REV 2U
 
@@ -64,8 +69,8 @@ static void IRAM_ATTR fan_tach_isr(void *argument)
 static void fan_apply_level(uint8_t level)
 {
     const uint32_t gpio_duty = (uint32_t)(FAN_PWM_MAX_DUTY * (100u - level)) / 100U;
-    ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, gpio_duty));
-    ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));
+    ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, FAN_PWM_CHANNEL, gpio_duty));
+    ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, FAN_PWM_CHANNEL));
 }
 
 static uint8_t stage_for_temp(int temp_c)
@@ -327,7 +332,7 @@ void fan_control_init(void)
 
     const ledc_timer_config_t timer_config = {
         .speed_mode = LEDC_LOW_SPEED_MODE,
-        .timer_num = LEDC_TIMER_0,
+        .timer_num = FAN_PWM_TIMER,
         .duty_resolution = FAN_PWM_RESOLUTION,
         .freq_hz = FAN_PWM_FREQ_HZ,
         .clk_cfg = LEDC_AUTO_CLK,
@@ -337,9 +342,9 @@ void fan_control_init(void)
     const ledc_channel_config_t channel_config = {
         .gpio_num = FAN_PWM_GPIO,
         .speed_mode = LEDC_LOW_SPEED_MODE,
-        .channel = LEDC_CHANNEL_0,
+        .channel = FAN_PWM_CHANNEL,
         .intr_type = LEDC_INTR_DISABLE,
-        .timer_sel = LEDC_TIMER_0,
+        .timer_sel = FAN_PWM_TIMER,
         .duty = 0,
         .hpoint = 0,
         .flags = {.output_invert = 0},
