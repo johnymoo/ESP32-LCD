@@ -12,3 +12,4 @@ __pycache__/
 /planning/01-raw/
 
 /tmp/
+.DS_Store
