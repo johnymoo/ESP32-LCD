@@ -31,7 +31,7 @@
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT BIT1
 #define WIFI_MAX_RETRY 10
-#define DEFAULT_PAGE_ROTATION_MS 10000
+#define DEFAULT_PAGE_ROTATION_MS 5000
 #define MIN_PAGE_ROTATION_MS 1000
 #define MAX_PAGE_ROTATION_MS 300000
 #define UI_REFRESH_MS 500
@@ -56,6 +56,7 @@
 
 #define DEGREE_C "\xC2\xB0" "C"
 #define BULLET "\xE2\x80\xA2"
+#define MIDDOT "\xC2\xB7"
 
 typedef enum {
     PAGE_SYSTEM = 0,
@@ -85,34 +86,41 @@ static int wifi_retries;
 static char wifi_ip[16] = "--";
 
 static lv_obj_t *pages[PAGE_COUNT];
-static lv_obj_t *system_index_label;
-static lv_obj_t *footer_labels[2];
+static lv_obj_t *clock_labels[PAGE_COUNT];
 static lv_obj_t *host_hero[2];
-static lv_obj_t *host_col1[2];
-static lv_obj_t *host_col2[2];
+static lv_obj_t *host_temp_label[2];
+static lv_obj_t *host_thr[2];
+static lv_obj_t *host_bar[2][3];
+static lv_obj_t *host_bar_value[2][3];
+static lv_obj_t *host_meta[2][3];
 static lv_obj_t *model_state_label;
-static lv_obj_t *model_metrics_label;
+static lv_obj_t *model_name_label;
+static lv_obj_t *model_hero_label;
+static lv_obj_t *model_in_label;
+static lv_obj_t *model_health_label;
+static lv_obj_t *model_bar[3];
+static lv_obj_t *model_bar_value[3];
 static lv_timer_t *page_timer;
 static uint32_t page_rotation_ms = DEFAULT_PAGE_ROTATION_MS;
 static ui_page_t current_page = PAGE_SYSTEM;
 
-static lv_obj_t *fan_ctrl_label;
+static lv_obj_t *fan_mode_label;
 static lv_obj_t *fan_stage_label;
 static lv_obj_t *fan_fault_banner;
 static lv_obj_t *fan_fault_text;
 static lv_obj_t *fan_rpm_value[2];
 static lv_obj_t *fan_rpm_bar[2];
-static lv_obj_t *fan_rpm_ref[2];
-static lv_obj_t *fan_pwm_label;
+static lv_obj_t *fan_pwm_value;
+static lv_obj_t *fan_pwm_bar;
 static lv_obj_t *fan_tach_label;
 
 static lv_obj_t *settings_tab[FAN_STAGE_COUNT == 4 ? 3 : 3];
-static lv_obj_t *settings_curve_rows[FAN_STAGE_COUNT];
 static lv_obj_t *settings_curve_values[FAN_STAGE_COUNT];
 static lv_obj_t *settings_ref_values[2];
 static lv_obj_t *settings_mode_bodies[3];
-static lv_obj_t *settings_mode_buttons[2];
-static lv_obj_t *settings_stage_buttons[FAN_STAGE_COUNT];
+static lv_obj_t *settings_mode_buttons[FAN_STAGE_COUNT + 1];
+static lv_obj_t *mode_live_bar[2];
+static lv_obj_t *mode_live_value[2];
 static lv_obj_t *settings_toast;
 static lv_timer_t *toast_timer;
 
@@ -124,12 +132,12 @@ static int32_t edit_max;
 static lv_obj_t *edit_title_label;
 static lv_obj_t *edit_value_label;
 static lv_obj_t *edit_left_label;
-static lv_obj_t *edit_side_label;
 static lv_obj_t *edit_info_label;
-static lv_obj_t *edit_duty_value_label;
+static lv_obj_t *edit_minus_button;
+static lv_obj_t *edit_plus_button;
 
 typedef struct {
-    char data[2048];
+    char data[4096];
     size_t length;
 } http_response_t;
 
@@ -184,9 +192,19 @@ static lv_obj_t *create_page(lv_obj_t *screen)
     return page;
 }
 
+static void create_title_band(lv_obj_t *page)
+{
+    /* Merged title/status band across the top; widgets created after it render
+     * on top, and its non-clickable surface lets taps fall through to the page. */
+    lv_obj_t *band = create_panel(page, 0, 0, LCD_H_RES, 22, COLOR_PANEL, COLOR_PANEL);
+    lv_obj_set_style_border_width(band, 0, 0);
+    lv_obj_set_style_radius(band, 0, 0);
+}
+
 static void create_title(lv_obj_t *page, const char *text)
 {
-    create_label(page, 8, 5, 0, &lv_font_montserrat_16, COLOR_CYAN, text, LV_TEXT_ALIGN_AUTO);
+    create_title_band(page);
+    create_label(page, 8, 3, 0, &lv_font_montserrat_16, COLOR_CYAN, text, LV_TEXT_ALIGN_AUTO);
 }
 
 static lv_obj_t *create_button(lv_obj_t *parent, int x, int y, int width, int height,
@@ -220,6 +238,11 @@ static void set_button_selected(lv_obj_t *button, bool selected)
 
 static void show_page(ui_page_t page);
 
+static ui_page_t next_status_page(void)
+{
+    return current_page == PAGE_FAN ? PAGE_SYSTEM : (ui_page_t)(current_page + 1);
+}
+
 static void nav_click_event(lv_event_t *event)
 {
     if (lv_event_get_code(event) != LV_EVENT_CLICKED) {
@@ -229,23 +252,12 @@ static void nav_click_event(lv_event_t *event)
     show_page((ui_page_t)target);
 }
 
-static void create_nav(lv_obj_t *page, unsigned active, int y)
-{
-    static const char *names[3] = {"SYSTEM", "MODEL", "FAN"};
-    for (unsigned i = 0; i < 3; i++) {
-        lv_obj_t *button = create_button(page, 5 + (int)i * 105, y, 100, 24,
-                                         names[i], &lv_font_montserrat_12);
-        set_button_selected(button, i == active);
-        lv_obj_add_event_cb(button, nav_click_event, LV_EVENT_CLICKED, (void *)(intptr_t)i);
-    }
-}
-
 static void page_touch_event(lv_event_t *event)
 {
     if (lv_event_get_code(event) != LV_EVENT_CLICKED) {
         return;
     }
-    show_page(current_page == PAGE_SYSTEM ? PAGE_MODEL : PAGE_SYSTEM);
+    show_page(next_status_page());
     if (page_timer != NULL) {
         lv_timer_reset(page_timer);
     }
@@ -259,7 +271,7 @@ static void show_page(ui_page_t page)
     lv_obj_clear_flag(pages[page], LV_OBJ_FLAG_HIDDEN);
     current_page = page;
     if (page_timer != NULL) {
-        if (page == PAGE_SYSTEM || page == PAGE_MODEL) {
+        if (page <= PAGE_FAN) {
             lv_timer_resume(page_timer);
             lv_timer_reset(page_timer);
         } else {
@@ -271,7 +283,7 @@ static void show_page(ui_page_t page)
 static void page_timer_event(lv_timer_t *timer)
 {
     (void)timer;
-    show_page(current_page == PAGE_SYSTEM ? PAGE_MODEL : PAGE_SYSTEM);
+    show_page(next_status_page());
 }
 
 static void fan_status_refresh(const fan_status_t *status)
@@ -292,55 +304,51 @@ static void fan_status_refresh(const fan_status_t *status)
         lv_obj_add_flag(fan_fault_banner, LV_OBJ_FLAG_HIDDEN);
     }
 
-    if (status->temps_valid) {
-        snprintf(text, sizeof(text), "#8ba8b7 CTRL  ##e6f1f5 %d" DEGREE_C "#",
-                 status->ctrl_temp_c);
-    } else {
-        snprintf(text, sizeof(text), "#8ba8b7 CTRL  ##e6f1f5 --#");
-    }
-    lv_label_set_text(fan_ctrl_label, text);
-
-    snprintf(text, sizeof(text), "#8ba8b7 STAGE  ##ffc66d %s %s %u%%#",
-             k_stage_name[status->stage], BULLET, status->level);
+    snprintf(text, sizeof(text), "MODE %s",
+             status->mode == FAN_MODE_MANUAL ? "MANUAL" : "AUTO");
+    lv_label_set_text(fan_mode_label, text);
+    snprintf(text, sizeof(text), "STAGE %s", k_stage_name[status->stage]);
     lv_label_set_text(fan_stage_label, text);
 
     fan_config_t config;
     fan_control_get_config(&config);
     for (unsigned i = 0; i < 2; i++) {
-        snprintf(text, sizeof(text), "%" PRIu32, status->rpm[i]);
+        snprintf(text, sizeof(text), "%" PRIu32 " / %u RPM", status->rpm[i],
+                 config.ref_rpm[i]);
         lv_label_set_text(fan_rpm_value[i], text);
         uint32_t ratio = status->rpm[i] * 100u / config.ref_rpm[i];
         if (ratio > 100) {
             ratio = 100;
         }
-        lv_obj_set_width(fan_rpm_bar[i], (int32_t)(137 * ratio / 100));
-        snprintf(text, sizeof(text), "REF %u", config.ref_rpm[i]);
-        lv_label_set_text(fan_rpm_ref[i], text);
+        lv_bar_set_value(fan_rpm_bar[i], (int32_t)ratio, LV_ANIM_OFF);
+        lv_bar_set_value(mode_live_bar[i], (int32_t)ratio, LV_ANIM_OFF);
+        char live[32];
+        snprintf(live, sizeof(live), "%" PRIu32 " / %u RPM", status->rpm[i],
+                 config.ref_rpm[i]);
+        lv_label_set_text(mode_live_value[i], live);
     }
 
-    snprintf(text, sizeof(text), "#8ba8b7 PWM  ##e6f1f5 %u%%#", status->level);
-    lv_label_set_text(fan_pwm_label, text);
+    lv_bar_set_value(fan_pwm_bar, (int32_t)status->level, LV_ANIM_OFF);
+    snprintf(text, sizeof(text), "%u%%", status->level);
+    lv_label_set_text(fan_pwm_value, text);
 
     const bool ok0 = status->tach_ok[0];
     const bool ok1 = status->tach_ok[1];
     if (ok0 == ok1) {
-        snprintf(text, sizeof(text), "#8ba8b7 TACH  ##%s %s / %s#",
-                 ok0 ? "8ee3a2" : "ff6b6b", ok0 ? "OK" : "FAIL", ok0 ? "OK" : "FAIL");
+        snprintf(text, sizeof(text), "tach %s", ok0 ? "OK" : "FAIL");
     } else {
-        snprintf(text, sizeof(text), "#8ba8b7 TACH  ##%s %s# / #%s %s#",
-                 ok0 ? "8ee3a2" : "ff6b6b", ok0 ? "OK" : "FAIL",
-                 ok1 ? "8ee3a2" : "ff6b6b", ok1 ? "OK" : "FAIL");
+        snprintf(text, sizeof(text), "tach %s " MIDDOT " %s",
+                 ok0 ? "OK" : "FAIL", ok1 ? "OK" : "FAIL");
     }
     lv_label_set_text(fan_tach_label, text);
+    lv_obj_set_style_text_color(fan_tach_label,
+                                lv_color_hex(ok0 && ok1 ? COLOR_GREEN : COLOR_RED), 0);
 
     const bool manual = status->mode == FAN_MODE_MANUAL;
     set_button_selected(settings_mode_buttons[0], !manual);
-    set_button_selected(settings_mode_buttons[1], manual);
     for (unsigned i = 0; i < FAN_STAGE_COUNT; i++) {
-        set_button_selected(settings_stage_buttons[i], manual && status->stage == i);
+        set_button_selected(settings_mode_buttons[i + 1], manual && status->stage == i);
     }
-    snprintf(text, sizeof(text), "1/3 %s %s", BULLET, manual ? "MANUAL" : "AUTO");
-    lv_label_set_text(system_index_label, text);
 }
 
 static void ui_refresh_timer(lv_timer_t *timer)
@@ -384,6 +392,7 @@ static void open_edit(edit_mode_t mode, uint8_t index)
     fan_config_t config;
     fan_control_get_config(&config);
     char title[40];
+    char info[64];
     edit_mode = mode;
     edit_index = index;
     if (mode == EDIT_CURVE) {
@@ -392,21 +401,21 @@ static void open_edit(edit_mode_t mode, uint8_t index)
         edit_min = index == 0 ? FAN_BOUND_MIN_C : config.bounds_c[index - 1] + 1;
         edit_max = index == FAN_STAGE_COUNT - 1 ? FAN_BOUND_MAX_C : config.bounds_c[index + 1] - 1;
         lv_label_set_text(edit_left_label, "UPPER LIMIT");
-        lv_label_set_text(edit_side_label, "<= next");
-        lv_label_set_text(edit_info_label, "Limits must increase; hysteresis 3" DEGREE_C);
-        char duty[16];
-        snprintf(duty, sizeof(duty), "%u%%", k_stage_level[index]);
-        lv_label_set_text(edit_duty_value_label, duty);
-        lv_obj_clear_flag(edit_duty_value_label, LV_OBJ_FLAG_HIDDEN);
+        snprintf(info, sizeof(info), "Limits must increase " MIDDOT " duty %u%%",
+                 k_stage_level[index]);
+        lv_label_set_text(edit_info_label, info);
+        lv_label_set_text(lv_obj_get_child(edit_minus_button, 0), "-  DOWN (1" DEGREE_C ")");
+        lv_label_set_text(lv_obj_get_child(edit_plus_button, 0), "+  UP (1" DEGREE_C ")");
     } else {
         snprintf(title, sizeof(title), "EDIT REF %s FAN%u", BULLET, index + 1u);
         edit_value = config.ref_rpm[index];
         edit_min = FAN_REF_RPM_MIN;
         edit_max = FAN_REF_RPM_MAX;
         lv_label_set_text(edit_left_label, "FULL-SPEED");
-        lv_label_set_text(edit_side_label, "RPM");
-        lv_label_set_text(edit_info_label, "Measured at 100% PWM; stored per fan");
-        lv_obj_add_flag(edit_duty_value_label, LV_OBJ_FLAG_HIDDEN);
+        snprintf(info, sizeof(info), "Measured at 100%% PWM " MIDDOT " step 10 RPM");
+        lv_label_set_text(edit_info_label, info);
+        lv_label_set_text(lv_obj_get_child(edit_minus_button, 0), "-  DOWN (10 RPM)");
+        lv_label_set_text(lv_obj_get_child(edit_plus_button, 0), "+  UP (10 RPM)");
     }
     lv_label_set_text(edit_title_label, title);
     apply_edit_value_label();
@@ -491,16 +500,12 @@ static void mode_button_event(lv_event_t *event)
     if (lv_event_get_code(event) != LV_EVENT_CLICKED) {
         return;
     }
-    fan_control_set_mode((intptr_t)lv_event_get_user_data(event) == 0 ? FAN_MODE_AUTO
-                                                                     : FAN_MODE_MANUAL);
-}
-
-static void stage_button_event(lv_event_t *event)
-{
-    if (lv_event_get_code(event) != LV_EVENT_CLICKED) {
-        return;
+    const intptr_t index = (intptr_t)lv_event_get_user_data(event);
+    if (index == 0) {
+        fan_control_set_mode(FAN_MODE_AUTO);
+    } else {
+        fan_control_set_manual_stage((uint8_t)(index - 1));
     }
-    fan_control_set_manual_stage((uint8_t)(intptr_t)lv_event_get_user_data(event));
 }
 
 static void refresh_settings_labels(void)
@@ -509,64 +514,113 @@ static void refresh_settings_labels(void)
     fan_control_get_config(&config);
     char text[48];
     for (unsigned i = 0; i < FAN_STAGE_COUNT; i++) {
-        snprintf(text, sizeof(text), "%u%% %s <= %u" DEGREE_C "  >",
-                 k_stage_level[i], BULLET, config.bounds_c[i]);
+        snprintf(text, sizeof(text), "<= %u" DEGREE_C " " MIDDOT " %u%%",
+                 config.bounds_c[i], k_stage_level[i]);
         lv_label_set_text(settings_curve_values[i], text);
     }
     for (unsigned i = 0; i < 2; i++) {
-        snprintf(text, sizeof(text), "%u RPM  >", config.ref_rpm[i]);
+        snprintf(text, sizeof(text), "REF %u RPM", config.ref_rpm[i]);
         lv_label_set_text(settings_ref_values[i], text);
     }
 }
 
+static void create_clock(lv_obj_t *page, ui_page_t index)
+{
+    clock_labels[index] = create_label(page, 232, 5, 80, &lv_font_montserrat_12,
+                                       COLOR_MUTED, "--:--:--", LV_TEXT_ALIGN_RIGHT);
+}
+
+static lv_obj_t *create_host_bar(lv_obj_t *parent, int x, int y, int width)
+{
+    lv_obj_t *bar = lv_bar_create(parent);
+    lv_obj_set_pos(bar, x, y);
+    lv_obj_set_size(bar, width, 8);
+    lv_bar_set_range(bar, 0, 100);
+    lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(bar, lv_color_hex(COLOR_BAR_TRACK), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(bar, lv_color_hex(COLOR_CYAN), LV_PART_INDICATOR);
+    lv_obj_set_style_radius(bar, 4, LV_PART_MAIN);
+    lv_obj_set_style_radius(bar, 4, LV_PART_INDICATOR);
+    lv_bar_set_value(bar, 0, LV_ANIM_OFF);
+    return bar;
+}
+
 static void create_system_page(lv_obj_t *screen)
 {
+    static const char *names[2] = {"HEAD", "WORKER"};
+    static const char *k_bar_name[3] = {"GPU", "RAM", "DSK"};
+
     lv_obj_t *page = create_page(screen);
     pages[PAGE_SYSTEM] = page;
     create_title(page, "SYSTEM LOAD");
-    system_index_label = create_label(page, 216, 8, 96, &lv_font_montserrat_12,
-                                      COLOR_MUTED, "1/3 " BULLET " AUTO", LV_TEXT_ALIGN_RIGHT);
-
-    static const char *names[2] = {"HEAD", "WORKER"};
-    for (unsigned i = 0; i < 2; i++) {
-        const int x = i == 0 ? 5 : 162;
-        lv_obj_t *panel = create_panel(page, x, 26, 153, 100, COLOR_PANEL, COLOR_BORDER);
-        create_label(panel, 8, 6, 0, &lv_font_montserrat_12, COLOR_MUTED, names[i],
-                     LV_TEXT_ALIGN_AUTO);
-        host_hero[i] = create_label(panel, 8, 20, 120, &lv_font_montserrat_20,
-                                    COLOR_BRIGHT, "--" DEGREE_C, LV_TEXT_ALIGN_AUTO);
-        host_col1[i] = create_label(panel, 8, 50, 70, &lv_font_montserrat_12,
-                                    COLOR_BRIGHT, "", LV_TEXT_ALIGN_AUTO);
-        lv_label_set_recolor(host_col1[i], true);
-        host_col2[i] = create_label(panel, 82, 50, 66, &lv_font_montserrat_12,
-                                    COLOR_BRIGHT, "", LV_TEXT_ALIGN_AUTO);
-        lv_label_set_recolor(host_col2[i], true);
-    }
-    create_nav(page, 0, 130);
-    footer_labels[0] = create_label(page, 5, 156, 310, &lv_font_montserrat_12,
-                                    COLOR_MUTED, "WiFi: connecting", LV_TEXT_ALIGN_RIGHT);
+    create_clock(page, PAGE_SYSTEM);
     lv_obj_add_event_cb(page, page_touch_event, LV_EVENT_CLICKED, NULL);
+
+    for (unsigned i = 0; i < 2; i++) {
+        const int x = i == 0 ? 8 : 164;
+        lv_obj_t *panel = create_panel(page, x, 28, 148, 140, COLOR_PANEL, COLOR_BORDER);
+        create_label(panel, 8, 6, 0, &lv_font_montserrat_12, COLOR_CYAN, names[i],
+                     LV_TEXT_ALIGN_AUTO);
+        host_thr[i] = create_label(panel, 64, 7, 27, &lv_font_montserrat_12, COLOR_DARK,
+                                   "THR", LV_TEXT_ALIGN_CENTER);
+        lv_obj_set_style_bg_opa(host_thr[i], LV_OPA_COVER, 0);
+        lv_obj_set_style_bg_color(host_thr[i], lv_color_hex(COLOR_AMBER), 0);
+        lv_obj_set_style_radius(host_thr[i], 3, 0);
+        lv_obj_add_flag(host_thr[i], LV_OBJ_FLAG_HIDDEN);
+
+        host_hero[i] = create_label(panel, 8, 22, 64, &lv_font_montserrat_24, COLOR_BRIGHT,
+                                    "--", LV_TEXT_ALIGN_AUTO);
+        host_temp_label[i] = create_label(panel, 74, 26, 70, &lv_font_montserrat_16,
+                                          COLOR_BRIGHT, "GPU --", LV_TEXT_ALIGN_AUTO);
+        for (unsigned j = 0; j < 3; j++) {
+            const int y = 56 + (int)j * 15;
+            create_label(panel, 8, y, 0, &lv_font_montserrat_12, COLOR_MUTED, k_bar_name[j],
+                         LV_TEXT_ALIGN_AUTO);
+            host_bar[i][j] = create_host_bar(panel, 40, y + 2, 76);
+            host_bar_value[i][j] = create_label(panel, 120, y, 20, &lv_font_montserrat_12,
+                                                COLOR_CYAN, "--", LV_TEXT_ALIGN_RIGHT);
+        }
+        for (unsigned j = 0; j < 3; j++) {
+            host_meta[i][j] = create_label(panel, 8, 103 + (int)j * 12, 136,
+                                           &lv_font_montserrat_12, COLOR_MUTED, "--",
+                                           LV_TEXT_ALIGN_AUTO);
+        }
+    }
 }
 
 static void create_model_page(lv_obj_t *screen)
 {
+    static const char *names[3] = {"KV cache", "Prefix hit", "Spec accept"};
+
     lv_obj_t *page = create_page(screen);
     pages[PAGE_MODEL] = page;
     create_title(page, "MODEL INFERENCE");
-    create_label(page, 216, 8, 96, &lv_font_montserrat_12, COLOR_MUTED, "2/3",
-                 LV_TEXT_ALIGN_RIGHT);
-
-    lv_obj_t *panel = create_panel(page, 5, 26, 310, 100, COLOR_PANEL, COLOR_BORDER);
-    model_state_label = create_label(panel, 8, 8, 0, &lv_font_montserrat_20,
-                                     COLOR_RED, "MODEL DOWN", LV_TEXT_ALIGN_AUTO);
-    model_metrics_label = create_label(panel, 8, 38, 294, &lv_font_montserrat_16,
-                                       COLOR_BRIGHT, "RUN 0  WAIT 0\nIN 0  OUT 0 tok/s",
-                                       LV_TEXT_ALIGN_AUTO);
-
-    create_nav(page, 1, 130);
-    footer_labels[1] = create_label(page, 5, 156, 310, &lv_font_montserrat_12,
-                                    COLOR_MUTED, "WiFi: connecting", LV_TEXT_ALIGN_RIGHT);
+    create_clock(page, PAGE_MODEL);
     lv_obj_add_event_cb(page, page_touch_event, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *panel = create_panel(page, 8, 28, 304, 140, COLOR_PANEL, COLOR_BORDER);
+    model_state_label = create_label(panel, 10, 8, 160, &lv_font_montserrat_16,
+                                     COLOR_RED, "MODEL DOWN", LV_TEXT_ALIGN_AUTO);
+    model_name_label = create_label(panel, 174, 10, 120, &lv_font_montserrat_12,
+                                    COLOR_CYAN, "", LV_TEXT_ALIGN_RIGHT);
+    model_hero_label = create_label(panel, 10, 28, 64, &lv_font_montserrat_24, COLOR_BRIGHT,
+                                    "--", LV_TEXT_ALIGN_AUTO);
+    create_label(panel, 78, 36, 0, &lv_font_montserrat_12, COLOR_MUTED, "tok/s out",
+                 LV_TEXT_ALIGN_AUTO);
+    model_in_label = create_label(panel, 10, 56, 130, &lv_font_montserrat_12, COLOR_MUTED,
+                                  "in -- tok/s", LV_TEXT_ALIGN_AUTO);
+    model_health_label = create_label(panel, 150, 28, 146, &lv_font_montserrat_12,
+                                      COLOR_BRIGHT, "run -- " MIDDOT " wait --\nTTFT -- " MIDDOT
+                                      " p95 --\nITL p95 --",
+                                      LV_TEXT_ALIGN_AUTO);
+    for (unsigned j = 0; j < 3; j++) {
+        const int y = 104 + (int)j * 18;
+        create_label(panel, 10, y, 76, &lv_font_montserrat_12, COLOR_MUTED, names[j],
+                     LV_TEXT_ALIGN_AUTO);
+        model_bar[j] = create_host_bar(panel, 88, y + 2, 168);
+        model_bar_value[j] = create_label(panel, 260, y, 36, &lv_font_montserrat_12,
+                                          COLOR_BRIGHT, "--", LV_TEXT_ALIGN_RIGHT);
+    }
 }
 
 static void create_fan_page(lv_obj_t *screen)
@@ -574,59 +628,48 @@ static void create_fan_page(lv_obj_t *screen)
     lv_obj_t *page = create_page(screen);
     pages[PAGE_FAN] = page;
     create_title(page, "FAN STATUS");
-    create_label(page, 240, 8, 40, &lv_font_montserrat_12, COLOR_MUTED, "3/3",
-                 LV_TEXT_ALIGN_RIGHT);
+    create_clock(page, PAGE_FAN);
 
-    lv_obj_t *gear = create_button(page, 288, 4, 24, 20, LV_SYMBOL_SETTINGS,
+    /* The gear sits centered in the top row; the rest of the row and the page
+     * body stay tap zones that advance the carousel. */
+    lv_obj_t *gear = create_button(page, 148, 1, 24, 20, LV_SYMBOL_SETTINGS,
                                    &lv_font_montserrat_16);
-    lv_obj_add_event_cb(gear, nav_click_event, LV_EVENT_CLICKED, (void *)(intptr_t)PAGE_SETTINGS);
+    lv_obj_add_event_cb(gear, nav_click_event, LV_EVENT_CLICKED,
+                        (void *)(intptr_t)PAGE_SETTINGS);
+    lv_obj_add_event_cb(page, page_touch_event, LV_EVENT_CLICKED, NULL);
 
-    fan_ctrl_label = create_label(page, 8, 28, 150, &lv_font_montserrat_16, COLOR_BRIGHT,
-                                  "", LV_TEXT_ALIGN_AUTO);
-    lv_label_set_recolor(fan_ctrl_label, true);
-    fan_stage_label = create_label(page, 160, 28, 152, &lv_font_montserrat_16, COLOR_BRIGHT,
-                                   "", LV_TEXT_ALIGN_RIGHT);
+    lv_obj_t *panel = create_panel(page, 8, 28, 304, 140, COLOR_PANEL, COLOR_BORDER);
+    fan_mode_label = create_label(panel, 10, 12, 110, &lv_font_montserrat_12, COLOR_BRIGHT,
+                                  "MODE --", LV_TEXT_ALIGN_AUTO);
+    lv_label_set_recolor(fan_mode_label, true);
+    fan_stage_label = create_label(panel, 130, 12, 110, &lv_font_montserrat_12, COLOR_BRIGHT,
+                                   "STAGE --", LV_TEXT_ALIGN_AUTO);
     lv_label_set_recolor(fan_stage_label, true);
+    fan_tach_label = create_label(panel, 10, 12, 284, &lv_font_montserrat_12, COLOR_GREEN,
+                                  "tach --", LV_TEXT_ALIGN_RIGHT);
 
-    for (unsigned i = 0; i < 2; i++) {
-        const int x = i == 0 ? 5 : 162;
-        lv_obj_t *panel = create_panel(page, x, 52, 153, 56, COLOR_PANEL, COLOR_BORDER);
-        char name[8];
-        snprintf(name, sizeof(name), "FAN%u", i + 1u);
-        create_label(panel, 8, 5, 0, &lv_font_montserrat_12, COLOR_MUTED, name,
-                     LV_TEXT_ALIGN_AUTO);
-        fan_rpm_ref[i] = create_label(panel, 65, 5, 80, &lv_font_montserrat_12, COLOR_MUTED,
-                                      "REF 1500", LV_TEXT_ALIGN_RIGHT);
-        fan_rpm_value[i] = create_label(panel, 8, 17, 100, &lv_font_montserrat_20,
-                                        COLOR_BRIGHT, "0", LV_TEXT_ALIGN_AUTO);
-        create_label(panel, 64, 25, 0, &lv_font_montserrat_12, COLOR_MUTED, " RPM",
-                     LV_TEXT_ALIGN_AUTO);
-        lv_obj_t *track = create_panel(panel, 8, 44, 137, 4, COLOR_BAR_TRACK, COLOR_BAR_TRACK);
-        lv_obj_set_style_radius(track, 2, 0);
-        lv_obj_set_style_border_width(track, 0, 0);
-        fan_rpm_bar[i] = lv_obj_create(track);
-        lv_obj_set_pos(fan_rpm_bar[i], 0, 0);
-        lv_obj_set_size(fan_rpm_bar[i], 0, 4);
-        lv_obj_set_style_bg_color(fan_rpm_bar[i], lv_color_hex(COLOR_CYAN), 0);
-        lv_obj_set_style_border_width(fan_rpm_bar[i], 0, 0);
-        lv_obj_set_style_radius(fan_rpm_bar[i], 2, 0);
-        lv_obj_clear_flag(fan_rpm_bar[i], LV_OBJ_FLAG_SCROLLABLE);
-    }
-
-    fan_pwm_label = create_label(page, 8, 112, 150, &lv_font_montserrat_16, COLOR_BRIGHT,
-                                 "", LV_TEXT_ALIGN_AUTO);
-    lv_label_set_recolor(fan_pwm_label, true);
-    fan_tach_label = create_label(page, 160, 112, 152, &lv_font_montserrat_16, COLOR_BRIGHT,
-                                  "", LV_TEXT_ALIGN_RIGHT);
-    lv_label_set_recolor(fan_tach_label, true);
-
-    fan_fault_banner = create_panel(page, 5, 26, 310, 20, COLOR_BANNER_BG, COLOR_RED);
+    fan_fault_banner = create_panel(page, 8, 28, 304, 20, COLOR_BANNER_BG, COLOR_RED);
     lv_obj_set_style_radius(fan_fault_banner, 3, 0);
-    fan_fault_text = create_label(fan_fault_banner, 0, 3, 310, &lv_font_montserrat_12,
+    fan_fault_text = create_label(fan_fault_banner, 0, 3, 304, &lv_font_montserrat_12,
                                   COLOR_RED, "", LV_TEXT_ALIGN_CENTER);
     lv_obj_add_flag(fan_fault_banner, LV_OBJ_FLAG_HIDDEN);
 
-    create_nav(page, 2, 132);
+    create_label(panel, 10, 40, 0, &lv_font_montserrat_12, COLOR_MUTED, "PWM",
+                 LV_TEXT_ALIGN_AUTO);
+    fan_pwm_bar = create_host_bar(panel, 50, 42, 208);
+    fan_pwm_value = create_label(panel, 262, 40, 32, &lv_font_montserrat_12, COLOR_BRIGHT,
+                                 "0%", LV_TEXT_ALIGN_RIGHT);
+
+    for (unsigned i = 0; i < 2; i++) {
+        const int y = 68 + (int)i * 30;
+        char name[8];
+        snprintf(name, sizeof(name), "FAN%u", i + 1u);
+        create_label(panel, 10, y, 0, &lv_font_montserrat_12, COLOR_CYAN, name,
+                     LV_TEXT_ALIGN_AUTO);
+        fan_rpm_bar[i] = create_host_bar(panel, 50, y + 2, 150);
+        fan_rpm_value[i] = create_label(panel, 204, y, 90, &lv_font_montserrat_12,
+                                        COLOR_BRIGHT, "-- RPM", LV_TEXT_ALIGN_RIGHT);
+    }
 }
 
 static lv_obj_t *create_settings_body(lv_obj_t *page, bool hidden)
@@ -649,8 +692,7 @@ static void create_settings_page(lv_obj_t *screen)
     lv_obj_t *page = create_page(screen);
     pages[PAGE_SETTINGS] = page;
     create_title(page, "FAN SETTINGS");
-    create_label(page, 160, 10, 152, &lv_font_montserrat_12, COLOR_MUTED,
-                 "SHARED PWM " BULLET " NVS", LV_TEXT_ALIGN_RIGHT);
+    create_clock(page, PAGE_SETTINGS);
 
     /* Tab bodies are created first so the tab buttons, back button, and toast
      * stack above them in z-order. */
@@ -662,19 +704,22 @@ static void create_settings_page(lv_obj_t *screen)
     settings_mode_bodies[2] = mode_body;
 
     for (unsigned i = 0; i < FAN_STAGE_COUNT; i++) {
-        lv_obj_t *row = create_panel(curve_body, 5, 52 + (int)i * 21, 310, 18, COLOR_ROW_BG,
+        lv_obj_t *row = create_panel(curve_body, 8, 56 + (int)i * 22, 304, 20, COLOR_ROW_BG,
                                      COLOR_ROW_BORDER);
         lv_obj_set_style_radius(row, 3, 0);
         lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_event_cb(row, curve_row_event, LV_EVENT_CLICKED, (void *)(intptr_t)i);
-        create_label(row, 8, 3, 0, &lv_font_montserrat_12, COLOR_BRIGHT, k_stage_name[i],
+        create_label(row, 8, 4, 0, &lv_font_montserrat_12, COLOR_BRIGHT, k_stage_name[i],
                      LV_TEXT_ALIGN_AUTO);
-        settings_curve_values[i] = create_label(row, 100, 3, 200, &lv_font_montserrat_12,
+        settings_curve_values[i] = create_label(row, 100, 4, 196, &lv_font_montserrat_12,
                                                 COLOR_CYAN, "", LV_TEXT_ALIGN_RIGHT);
     }
+    create_label(curve_body, 8, 150, 304, &lv_font_montserrat_12, COLOR_MUTED,
+                 "Tap a stage to edit " MIDDOT " hysteresis 3" DEGREE_C,
+                 LV_TEXT_ALIGN_AUTO);
 
     for (unsigned i = 0; i < 2; i++) {
-        lv_obj_t *row = create_panel(calib_body, 5, 58 + (int)i * 30, 310, 24, COLOR_ROW_BG,
+        lv_obj_t *row = create_panel(calib_body, 8, 60 + (int)i * 30, 304, 24, COLOR_ROW_BG,
                                      COLOR_ROW_BORDER);
         lv_obj_set_style_radius(row, 3, 0);
         lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
@@ -683,41 +728,52 @@ static void create_settings_page(lv_obj_t *screen)
         snprintf(name, sizeof(name), "FAN%u FULL-SPEED REF", i + 1u);
         create_label(row, 8, 6, 0, &lv_font_montserrat_12, COLOR_BRIGHT, name,
                      LV_TEXT_ALIGN_AUTO);
-        settings_ref_values[i] = create_label(row, 140, 6, 162, &lv_font_montserrat_12,
+        settings_ref_values[i] = create_label(row, 140, 6, 156, &lv_font_montserrat_12,
                                               COLOR_CYAN, "", LV_TEXT_ALIGN_RIGHT);
     }
-    create_label(calib_body, 8, 122, 304, &lv_font_montserrat_12, COLOR_MUTED,
-                 "Relative RPM and tach health only", LV_TEXT_ALIGN_AUTO);
+    create_label(calib_body, 8, 150, 304, &lv_font_montserrat_12, COLOR_MUTED,
+                 "Measured at 100% PWM " MIDDOT " tach health only", LV_TEXT_ALIGN_AUTO);
 
-    settings_mode_buttons[0] = create_button(mode_body, 5, 52, 150, 26, "AUTO",
+    /* One row of mode buttons: AUTO plus the four manual stages. */
+    settings_mode_buttons[0] = create_button(mode_body, 8, 56, 57, 24, "AUTO",
                                              &lv_font_montserrat_12);
-    settings_mode_buttons[1] = create_button(mode_body, 165, 52, 150, 26, "MANUAL",
-                                             &lv_font_montserrat_12);
-    lv_obj_add_event_cb(settings_mode_buttons[0], mode_button_event, LV_EVENT_CLICKED, (void *)0);
-    lv_obj_add_event_cb(settings_mode_buttons[1], mode_button_event, LV_EVENT_CLICKED, (void *)1);
+    lv_obj_add_event_cb(settings_mode_buttons[0], mode_button_event, LV_EVENT_CLICKED,
+                        (void *)0);
     for (unsigned i = 0; i < FAN_STAGE_COUNT; i++) {
-        settings_stage_buttons[i] = create_button(mode_body, 5 + (int)i * 79, 86, 73, 26,
-                                                  k_stage_name[i], &lv_font_montserrat_12);
-        lv_obj_add_event_cb(settings_stage_buttons[i], stage_button_event, LV_EVENT_CLICKED,
-                            (void *)(intptr_t)i);
+        settings_mode_buttons[i + 1] = create_button(mode_body, 8 + (int)(i + 1) * 61, 56,
+                                                     57, 24, k_stage_name[i],
+                                                     &lv_font_montserrat_12);
+        lv_obj_add_event_cb(settings_mode_buttons[i + 1], mode_button_event,
+                            LV_EVENT_CLICKED, (void *)(intptr_t)(i + 1));
     }
-    create_label(mode_body, 8, 122, 304, &lv_font_montserrat_12, COLOR_MUTED,
-                 "MANUAL reverts to AUTO on restart", LV_TEXT_ALIGN_AUTO);
+    for (unsigned i = 0; i < 2; i++) {
+        lv_obj_t *row = create_panel(mode_body, 8, 92 + (int)i * 26, 304, 22, COLOR_ROW_BG,
+                                     COLOR_ROW_BORDER);
+        char name[8];
+        snprintf(name, sizeof(name), "FAN%u", i + 1u);
+        create_label(row, 12, 5, 0, &lv_font_montserrat_12, COLOR_CYAN, name,
+                     LV_TEXT_ALIGN_AUTO);
+        mode_live_bar[i] = create_host_bar(row, 52, 7, 110);
+        mode_live_value[i] = create_label(row, 194, 5, 102, &lv_font_montserrat_12,
+                                          COLOR_BRIGHT, "-- RPM", LV_TEXT_ALIGN_RIGHT);
+    }
+    create_label(mode_body, 8, 150, 304, &lv_font_montserrat_12, COLOR_MUTED,
+                 "Stage tap = MANUAL " MIDDOT " reverts to AUTO on restart",
+                 LV_TEXT_ALIGN_AUTO);
 
     static const char *tabs[3] = {"CURVE", "CALIB", "MODE"};
     for (unsigned i = 0; i < 3; i++) {
-        settings_tab[i] = create_button(page, 13 + (int)i * 103, 26, 88, 22, tabs[i],
+        settings_tab[i] = create_button(page, 8 + (int)i * 104, 28, 96, 20, tabs[i],
                                         &lv_font_montserrat_12);
         set_button_selected(settings_tab[i], i == 0);
         lv_obj_add_event_cb(settings_tab[i], settings_tab_event, LV_EVENT_CLICKED,
                             (void *)(intptr_t)i);
     }
 
-    lv_obj_t *back = create_button(page, 5, 142, 310, 24, "BACK TO FAN STATUS",
-                                   &lv_font_montserrat_12);
+    lv_obj_t *back = create_button(page, 176, 1, 48, 20, "BACK", &lv_font_montserrat_12);
     lv_obj_add_event_cb(back, nav_click_event, LV_EVENT_CLICKED, (void *)(intptr_t)PAGE_FAN);
 
-    settings_toast = create_label(page, 0, 120, 320, &lv_font_montserrat_12, COLOR_AMBER,
+    settings_toast = create_label(page, 0, 78, 320, &lv_font_montserrat_12, COLOR_AMBER,
                                   "", LV_TEXT_ALIGN_CENTER);
     lv_obj_add_flag(settings_toast, LV_OBJ_FLAG_HIDDEN);
 }
@@ -726,29 +782,28 @@ static void create_edit_page(lv_obj_t *screen)
 {
     lv_obj_t *page = create_page(screen);
     pages[PAGE_EDIT] = page;
-    edit_title_label = create_label(page, 8, 5, 240, &lv_font_montserrat_16, COLOR_CYAN, "",
+    create_title_band(page);
+    create_clock(page, PAGE_EDIT);
+    edit_title_label = create_label(page, 8, 3, 240, &lv_font_montserrat_16, COLOR_CYAN, "",
                                     LV_TEXT_ALIGN_AUTO);
-    create_label(page, 240, 10, 72, &lv_font_montserrat_12, COLOR_MUTED, "TAP +/-",
-                 LV_TEXT_ALIGN_RIGHT);
 
-    lv_obj_t *minus = create_button(page, 104, 36, 40, 30, "-", &lv_font_montserrat_16);
-    lv_obj_add_event_cb(minus, edit_button_event, LV_EVENT_CLICKED, (void *)(intptr_t)-1);
-    edit_value_label = create_label(page, 144, 41, 72, &lv_font_montserrat_20, COLOR_AMBER,
+    lv_obj_t *panel = create_panel(page, 8, 28, 304, 140, COLOR_PANEL, COLOR_BORDER);
+    edit_left_label = create_label(panel, 0, 10, 304, &lv_font_montserrat_12, COLOR_MUTED,
+                                   "", LV_TEXT_ALIGN_CENTER);
+    edit_value_label = create_label(panel, 0, 24, 304, &lv_font_montserrat_24, COLOR_BRIGHT,
                                     "", LV_TEXT_ALIGN_CENTER);
-    lv_obj_t *plus = create_button(page, 216, 36, 40, 30, "+", &lv_font_montserrat_16);
-    lv_obj_add_event_cb(plus, edit_button_event, LV_EVENT_CLICKED, (void *)(intptr_t)1);
-    edit_left_label = create_label(page, 8, 42, 96, &lv_font_montserrat_12, COLOR_MUTED,
-                                   "", LV_TEXT_ALIGN_AUTO);
-    edit_side_label = create_label(page, 256, 45, 56, &lv_font_montserrat_12, COLOR_MUTED,
-                                   "", LV_TEXT_ALIGN_AUTO);
-    edit_duty_value_label = create_label(page, 144, 83, 72, &lv_font_montserrat_20,
-                                         COLOR_AMBER, "", LV_TEXT_ALIGN_CENTER);
-    edit_info_label = create_label(page, 8, 116, 304, &lv_font_montserrat_12, COLOR_MUTED,
-                                   "", LV_TEXT_ALIGN_AUTO);
-
-    lv_obj_t *cancel = create_button(page, 30, 140, 112, 26, "CANCEL", &lv_font_montserrat_12);
+    edit_info_label = create_label(panel, 8, 52, 288, &lv_font_montserrat_12, COLOR_MUTED,
+                                   "", LV_TEXT_ALIGN_CENTER);
+    edit_minus_button = create_button(panel, 8, 68, 142, 30, "-", &lv_font_montserrat_12);
+    lv_obj_add_event_cb(edit_minus_button, edit_button_event, LV_EVENT_CLICKED,
+                        (void *)(intptr_t)-1);
+    edit_plus_button = create_button(panel, 154, 68, 142, 30, "+", &lv_font_montserrat_12);
+    lv_obj_add_event_cb(edit_plus_button, edit_button_event, LV_EVENT_CLICKED,
+                        (void *)(intptr_t)1);
+    lv_obj_t *cancel = create_button(panel, 154, 104, 142, 26, "CANCEL",
+                                     &lv_font_montserrat_12);
     lv_obj_add_event_cb(cancel, edit_cancel_event, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *save = create_button(page, 178, 140, 112, 26, "SAVE", &lv_font_montserrat_12);
+    lv_obj_t *save = create_button(panel, 8, 104, 142, 26, "SAVE", &lv_font_montserrat_12);
     set_button_selected(save, true);
     lv_obj_add_event_cb(save, edit_save_event, LV_EVENT_CLICKED, NULL);
 }
@@ -772,12 +827,11 @@ static void create_ui(void)
     lv_timer_create(ui_refresh_timer, UI_REFRESH_MS, NULL);
 }
 
-static void set_footer(const char *text, lv_color_t color)
+static void set_clock(const char *text)
 {
     if (lvgl_port_lock(1000)) {
-        for (unsigned i = 0; i < 2; i++) {
-            lv_label_set_text(footer_labels[i], text);
-            lv_obj_set_style_text_color(footer_labels[i], color, 0);
+        for (unsigned i = 0; i < PAGE_COUNT; i++) {
+            lv_label_set_text(clock_labels[i], text);
         }
         lvgl_port_unlock();
     }
@@ -793,6 +847,12 @@ static bool json_has(cJSON *object, const char *name)
 {
     cJSON *item = cJSON_GetObjectItemCaseSensitive(object, name);
     return cJSON_IsNumber(item);
+}
+
+static bool json_bool(cJSON *object, const char *name)
+{
+    cJSON *item = cJSON_GetObjectItemCaseSensitive(object, name);
+    return cJSON_IsBool(item) && cJSON_IsTrue(item);
 }
 
 static void format_uptime(double seconds, char *out, size_t out_size)
@@ -814,79 +874,191 @@ static void format_uptime(double seconds, char *out, size_t out_size)
     }
 }
 
+static void set_bar_value(lv_obj_t *bar, lv_obj_t *label, double pct, uint32_t color,
+                          const char *text)
+{
+    if (pct >= 0) {
+        lv_bar_set_value(bar, (int32_t)(pct + 0.5), LV_ANIM_OFF);
+        lv_label_set_text(label, text);
+    } else {
+        lv_bar_set_value(bar, 0, LV_ANIM_OFF);
+        lv_label_set_text(label, "--");
+    }
+    lv_obj_set_style_bg_color(bar, lv_color_hex(color), LV_PART_INDICATOR);
+    lv_obj_set_style_text_color(label, lv_color_hex(color), 0);
+}
+
+static uint32_t pct_color(double pct)
+{
+    return pct >= 97 ? COLOR_RED : pct >= 90 ? COLOR_AMBER : COLOR_CYAN;
+}
+
+static void format_pct(char *out, size_t size, double pct, int digits)
+{
+    if (pct < 0) {
+        strlcpy(out, "--", size);
+    } else if (digits) {
+        snprintf(out, size, "%.*f%%", digits, pct);
+    } else {
+        snprintf(out, size, "%.0f%%", pct);
+    }
+}
+
 static void update_host_panel(unsigned index, cJSON *host)
 {
-    char hero[32];
-    char col1[96];
-    char col2[96];
+    char text[64];
+    char value[24];
     char uptime[12];
+    const bool valid = host != NULL && json_has(host, "temp_c");
 
-    if (host == NULL || !json_has(host, "temp_c")) {
-        strlcpy(hero, "--" DEGREE_C, sizeof(hero));
-        strlcpy(col1, "#8ba8b7 PWR ##e6f1f5 --#\n#8ba8b7 GPU ##e6f1f5 --#\n"
-                     "#8ba8b7 RAM ##e6f1f5 --#", sizeof(col1));
-        strlcpy(col2, "#8ba8b7 NVME ##e6f1f5 --#\n#8ba8b7 LOAD ##e6f1f5 --#\n"
-                     "#8ba8b7 UPTM ##e6f1f5 --#", sizeof(col2));
-    } else {
-        const double temp = json_number(host, "temp_c", -1);
-        const double power = json_number(host, "power_w", -1);
-        const double util = json_number(host, "gpu_util_pct", -1);
-        const double ram = json_number(host, "mem_used_pct", -1);
-        const double load = json_number(host, "load1", -1);
-        const double nvme = json_number(host, "nvme_temp_c", -1);
-        format_uptime(json_number(host, "uptime_s", -1), uptime, sizeof(uptime));
-        snprintf(hero, sizeof(hero), "%.0f" DEGREE_C, temp);
-        if (power >= 0) {
-            snprintf(col1, sizeof(col1), "#8ba8b7 PWR ##e6f1f5 %.1f W#", power);
-        } else {
-            strlcpy(col1, "#8ba8b7 PWR ##e6f1f5 --#", sizeof(col1));
+    if (!valid) {
+        lv_label_set_text(host_hero[index], "--");
+        lv_label_set_text(host_temp_label[index], "GPU --");
+        for (unsigned j = 0; j < 3; j++) {
+            lv_bar_set_value(host_bar[index][j], 0, LV_ANIM_OFF);
+            lv_label_set_text(host_bar_value[index][j], "--");
+            lv_label_set_text(host_meta[index][j], "--");
         }
-        {
-            char line[48];
-            if (util >= 0) {
-                snprintf(line, sizeof(line), "#8ba8b7 GPU ##e6f1f5 %.0f%%#", util);
-            } else {
-                strlcpy(line, "#8ba8b7 GPU ##e6f1f5 --#", sizeof(line));
-            }
-            strlcat(col1, "\n", sizeof(col1));
-            strlcat(col1, line, sizeof(col1));
-            if (ram >= 0) {
-                snprintf(line, sizeof(line), "#8ba8b7 RAM ##e6f1f5 %.0f%%#", ram);
-            } else {
-                strlcpy(line, "#8ba8b7 RAM ##e6f1f5 --#", sizeof(line));
-            }
-            strlcat(col1, "\n", sizeof(col1));
-            strlcat(col1, line, sizeof(col1));
-        }
-        if (nvme >= 0) {
-            snprintf(col2, sizeof(col2), "#8ba8b7 NVME ##e6f1f5 %.0f" DEGREE_C "#", nvme);
-        } else {
-            strlcpy(col2, "#8ba8b7 NVME ##e6f1f5 --#", sizeof(col2));
-        }
-        {
-            char line[48];
-            if (load >= 0) {
-                snprintf(line, sizeof(line), "#8ba8b7 LOAD ##e6f1f5 %.1f#", load);
-            } else {
-                strlcpy(line, "#8ba8b7 LOAD ##e6f1f5 --#", sizeof(line));
-            }
-            strlcat(col2, "\n", sizeof(col2));
-            strlcat(col2, line, sizeof(col2));
-            snprintf(line, sizeof(line), "#8ba8b7 UPTM ##e6f1f5 %s#", uptime);
-            strlcat(col2, "\n", sizeof(col2));
-            strlcat(col2, line, sizeof(col2));
-        }
+        lv_obj_add_flag(host_thr[index], LV_OBJ_FLAG_HIDDEN);
+        return;
     }
-    lv_label_set_text(host_hero[index], hero);
-    lv_label_set_text(host_col1[index], col1);
-    lv_label_set_text(host_col2[index], col2);
+
+    const double temp = json_number(host, "temp_c", -1);
+    const double util = json_number(host, "gpu_util_pct", -1);
+    const double ram = json_number(host, "mem_used_pct", -1);
+    const double disk = json_number(host, "root_used_pct", -1);
+    const double power = json_number(host, "power_w", -1);
+    const double power_est = json_number(host, "power_sys_est_w", -1);
+    const double soc = json_number(host, "cpu_temp_c", -1);
+    const double nvme = json_number(host, "nvme_temp_c", -1);
+    const double cpu = json_number(host, "cpu_usage_pct", -1);
+    format_uptime(json_number(host, "uptime_s", -1), uptime, sizeof(uptime));
+
+    if (util >= 0) {
+        snprintf(text, sizeof(text), "%.0f%%", util);
+        lv_label_set_text(host_hero[index], text);
+    } else {
+        lv_label_set_text(host_hero[index], "--");
+    }
+    if (temp >= 0) {
+        snprintf(text, sizeof(text), "GPU %.0f" DEGREE_C, temp);
+        lv_label_set_text(host_temp_label[index], text);
+    } else {
+        lv_label_set_text(host_temp_label[index], "GPU --");
+    }
+
+    /* GPU utilisation is activity, not a capacity warning: always cyan. */
+    format_pct(value, sizeof(value), util, 0);
+    set_bar_value(host_bar[index][0], host_bar_value[index][0], util, COLOR_CYAN, value);
+    format_pct(value, sizeof(value), ram, 0);
+    set_bar_value(host_bar[index][1], host_bar_value[index][1], ram, pct_color(ram), value);
+    format_pct(value, sizeof(value), disk, 0);
+    set_bar_value(host_bar[index][2], host_bar_value[index][2], disk, pct_color(disk), value);
+
+    if (power >= 0) {
+        char est[24];
+        if (power_est >= 0) {
+            snprintf(est, sizeof(est), "est %.1fW", power_est);
+        } else {
+            strlcpy(est, "est --", sizeof(est));
+        }
+        snprintf(text, sizeof(text), "%.1fW " MIDDOT " %s", power, est);
+        lv_label_set_text(host_meta[index][0], text);
+    } else {
+        lv_label_set_text(host_meta[index][0], "--");
+    }
+    if (soc >= 0 && nvme >= 0) {
+        snprintf(text, sizeof(text), "SoC %.0f" DEGREE_C " " MIDDOT " NVMe %.0f" DEGREE_C,
+                 soc, nvme);
+        lv_label_set_text(host_meta[index][1], text);
+    } else {
+        lv_label_set_text(host_meta[index][1], "--");
+    }
+    if (cpu >= 0) {
+        snprintf(text, sizeof(text), "CPU %.0f%% " MIDDOT " up %s", cpu, uptime);
+    } else {
+        snprintf(text, sizeof(text), "CPU -- " MIDDOT " up %s", uptime);
+    }
+    lv_label_set_text(host_meta[index][2], text);
+
+    const bool throttle = json_bool(host, "throttle_thermal") ||
+                          json_bool(host, "throttle_power_cap");
+    if (throttle) {
+        lv_obj_clear_flag(host_thr[index], LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(host_thr[index], LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
+static void update_model_panel(cJSON *model)
+{
+    char text[128];
+    char value[24];
+    char line[48];
+    char itl[24];
+    cJSON *healthy = cJSON_GetObjectItemCaseSensitive(model, "healthy");
+    const bool model_ok = cJSON_IsTrue(healthy);
+    lv_label_set_text(model_state_label, model_ok ? "MODEL ONLINE" : "MODEL DOWN");
+    lv_obj_set_style_text_color(model_state_label,
+                                lv_color_hex(model_ok ? COLOR_GREEN : COLOR_RED), 0);
+    cJSON *name = cJSON_GetObjectItemCaseSensitive(model, "name");
+    lv_label_set_text(model_name_label, cJSON_IsString(name) ? name->valuestring : "");
+
+    if (!model_ok) {
+        lv_label_set_text(model_hero_label, "--");
+        lv_label_set_text(model_in_label, "in -- tok/s");
+        lv_label_set_text(model_health_label, "run -- " MIDDOT " wait --\nTTFT -- " MIDDOT
+                                              " p95 --\nITL p95 --");
+        for (unsigned j = 0; j < 3; j++) {
+            lv_bar_set_value(model_bar[j], 0, LV_ANIM_OFF);
+            lv_label_set_text(model_bar_value[j], "--");
+        }
+        return;
+    }
+
+    snprintf(text, sizeof(text), "%.1f", json_number(model, "generation_tps", 0));
+    lv_label_set_text(model_hero_label, text);
+    snprintf(text, sizeof(text), "in %.1f tok/s", json_number(model, "prompt_tps", 0));
+    lv_label_set_text(model_in_label, text);
+
+    const double ttft = json_number(model, "ttft_ms", -1);
+    const double ttft_p95 = json_number(model, "ttft_p95_ms", -1);
+    if (ttft >= 0 && ttft_p95 >= 0) {
+        snprintf(line, sizeof(line), "TTFT %.1fs " MIDDOT " p95 %.1fs", ttft / 1000.0,
+                 ttft_p95 / 1000.0);
+    } else {
+        strlcpy(line, "TTFT --", sizeof(line));
+    }
+    const double itl_p95 = json_number(model, "itl_p95_ms", -1);
+    if (itl_p95 >= 0) {
+        snprintf(itl, sizeof(itl), "ITL p95 %.0fms", itl_p95);
+    } else {
+        strlcpy(itl, "ITL p95 --", sizeof(itl));
+    }
+    snprintf(text, sizeof(text), "run %.0f " MIDDOT " wait %.0f\n%s\n%s",
+             json_number(model, "running", 0), json_number(model, "waiting", 0), line, itl);
+    lv_label_set_text(model_health_label, text);
+
+    const double kv = json_number(model, "kv_pct", -1);
+    if (kv >= 0) {
+        snprintf(value, sizeof(value), "%.1f%%", kv);
+    } else {
+        strlcpy(value, "--", sizeof(value));
+    }
+    set_bar_value(model_bar[0], model_bar_value[0], kv, COLOR_CYAN, value);
+    const double prefix = json_number(model, "prefix_cache_hit_pct", -1);
+    format_pct(value, sizeof(value), prefix, 0);
+    set_bar_value(model_bar[1], model_bar_value[1], prefix, COLOR_CYAN, value);
+    const double spec = json_number(model, "spec_accept_pct", -1);
+    format_pct(value, sizeof(value), spec, 0);
+    set_bar_value(model_bar[2], model_bar_value[2], spec, COLOR_CYAN, value);
 }
 
 static void update_dashboard(const char *json)
 {
     cJSON *root = cJSON_Parse(json);
     if (root == NULL) {
-        set_footer("Status: invalid JSON", lv_color_hex(COLOR_RED));
+        set_clock("--:--:--");
         fan_control_sample_lost();
         return;
     }
@@ -903,7 +1075,7 @@ static void update_dashboard(const char *json)
 
     if (!cJSON_IsObject(head) || !cJSON_IsObject(worker) || !cJSON_IsObject(model)) {
         cJSON_Delete(root);
-        set_footer("Status: host unavailable", lv_color_hex(COLOR_AMBER));
+        set_clock("--:--:--");
         fan_control_sample_lost();
         return;
     }
@@ -912,18 +1084,6 @@ static void update_dashboard(const char *json)
     const bool worker_valid = json_has(worker, "temp_c");
     const double head_temp = json_number(head, "temp_c", 0);
     const double worker_temp = json_number(worker, "temp_c", 0);
-
-    char model_metrics_text[128];
-    char footer_text[80];
-    cJSON *healthy = cJSON_GetObjectItemCaseSensitive(model, "healthy");
-    const bool model_ok = cJSON_IsTrue(healthy);
-    snprintf(model_metrics_text, sizeof(model_metrics_text),
-             "RUN %.0f  WAIT %.0f  KV %.0f%%\nIN %.0f  OUT %.0f tok/s",
-             json_number(model, "running", 0), json_number(model, "waiting", 0),
-             json_number(model, "kv_pct", 0), json_number(model, "prompt_tps", 0),
-             json_number(model, "generation_tps", 0));
-    snprintf(footer_text, sizeof(footer_text), "WiFi %s  Updated %s", wifi_ip,
-             cJSON_IsString(updated) ? updated->valuestring : "--:--:--");
 
     if (lvgl_port_lock(1000)) {
         if (new_rotation_ms != page_rotation_ms) {
@@ -934,13 +1094,10 @@ static void update_dashboard(const char *json)
         }
         update_host_panel(0, head);
         update_host_panel(1, worker);
-        lv_label_set_text(model_state_label, model_ok ? "MODEL ONLINE" : "MODEL DOWN");
-        lv_obj_set_style_text_color(model_state_label,
-                                    model_ok ? lv_color_hex(COLOR_GREEN) : lv_color_hex(COLOR_RED), 0);
-        lv_label_set_text(model_metrics_label, model_metrics_text);
-        for (unsigned i = 0; i < 2; i++) {
-            lv_label_set_text(footer_labels[i], footer_text);
-            lv_obj_set_style_text_color(footer_labels[i], lv_color_hex(COLOR_MUTED), 0);
+        update_model_panel(model);
+        for (unsigned i = 0; i < PAGE_COUNT; i++) {
+            lv_label_set_text(clock_labels[i],
+                              cJSON_IsString(updated) ? updated->valuestring : "--:--:--");
         }
         lvgl_port_unlock();
     }
@@ -984,7 +1141,9 @@ static esp_err_t fetch_status(char *output, size_t output_size)
 
 static void dashboard_task(void *argument)
 {
-    char json[2048];
+    /* Static so the enlarged payload buffer stays off the 8 KB task stack
+     * (fetch_status keeps its own 4 KB response buffer on the same stack). */
+    static char json[4096];
     while (true) {
         EventBits_t bits = xEventGroupGetBits(wifi_events);
         if (bits & WIFI_CONNECTED_BIT) {
@@ -994,11 +1153,11 @@ static void dashboard_task(void *argument)
                 ESP_LOGI(TAG, "cluster status updated");
             } else {
                 ESP_LOGW(TAG, "status fetch failed: %s", esp_err_to_name(result));
-                set_footer("Status endpoint unreachable", lv_color_hex(COLOR_AMBER));
+                set_clock("--:--:--");
                 fan_control_sample_lost();
             }
         } else {
-            set_footer("WiFi disconnected", lv_color_hex(COLOR_RED));
+            set_clock("--:--:--");
             fan_control_sample_lost();
             if (bits & WIFI_FAIL_BIT) {
                 wifi_retries = 0;
@@ -1142,7 +1301,6 @@ void app_main(void)
 
     result = init_wifi();
     if (result != ESP_OK) {
-        set_footer("WiFi connection failed", lv_color_hex(COLOR_RED));
         ESP_LOGE(TAG, "WiFi connection failed");
     }
     xTaskCreate(dashboard_task, "dashboard", 8192, NULL, 4, NULL);
