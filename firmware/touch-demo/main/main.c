@@ -96,13 +96,19 @@ static lv_obj_t *host_thr[2];
 static lv_obj_t *host_bar[2][6];
 static lv_obj_t *host_bar_value[2][6];
 static lv_obj_t *host_foot[2];
+static lv_obj_t *model_dot;
 static lv_obj_t *model_state_label;
 static lv_obj_t *model_name_label;
 static lv_obj_t *model_hero_label;
-static lv_obj_t *model_in_label;
-static lv_obj_t *model_health_label;
-static lv_obj_t *model_bar[3];
-static lv_obj_t *model_bar_value[3];
+static lv_obj_t *model_prompt_label;
+static lv_obj_t *model_chip_label[3];
+static lv_obj_t *model_ttft_label;
+static lv_obj_t *model_p95_label;
+static lv_obj_t *model_itl_label;
+static lv_obj_t *model_prefix_value;
+static lv_obj_t *model_spec_value;
+static lv_obj_t *model_kv_label;
+static lv_obj_t *model_kv_bar;
 static lv_timer_t *page_timer;
 static uint32_t page_rotation_ms = DEFAULT_PAGE_ROTATION_MS;
 static ui_page_t current_page = PAGE_SYSTEM;
@@ -589,10 +595,26 @@ static void create_system_page(lv_obj_t *screen)
     }
 }
 
+static lv_obj_t *create_model_chip(lv_obj_t *parent, int x, int y, int width)
+{
+    lv_obj_t *chip = lv_btn_create(parent);
+    lv_obj_set_pos(chip, x, y);
+    lv_obj_set_size(chip, width, 18);
+    lv_obj_set_style_bg_color(chip, lv_color_hex(COLOR_BAR_TRACK),
+                              LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_width(chip, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_radius(chip, 3, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_shadow_width(chip, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_t *label = lv_label_create(chip);
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(label, lv_color_hex(COLOR_MUTED), 0);
+    lv_label_set_text(label, "--");
+    lv_obj_center(label);
+    return label;
+}
+
 static void create_model_page(lv_obj_t *screen)
 {
-    static const char *names[3] = {"KV cache", "Prefix hit", "Spec accept"};
-
     lv_obj_t *page = create_page(screen);
     pages[PAGE_MODEL] = page;
     create_title(page, "MODEL INFERENCE");
@@ -600,28 +622,67 @@ static void create_model_page(lv_obj_t *screen)
     lv_obj_add_event_cb(page, page_touch_event, LV_EVENT_CLICKED, NULL);
 
     lv_obj_t *panel = create_panel(page, 8, 28, 304, 140, COLOR_PANEL, COLOR_BORDER);
-    model_state_label = create_label(panel, 10, 8, 160, &lv_font_montserrat_16,
+
+    model_dot = create_panel(panel, 8, 8, 8, 8, COLOR_RED, COLOR_RED);
+    lv_obj_set_style_radius(model_dot, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_border_width(model_dot, 0, 0);
+    model_state_label = create_label(panel, 22, 6, 100, &lv_font_montserrat_12,
                                      COLOR_RED, "MODEL DOWN", LV_TEXT_ALIGN_AUTO);
-    model_name_label = create_label(panel, 174, 10, 120, &lv_font_montserrat_12,
-                                    COLOR_CYAN, "", LV_TEXT_ALIGN_RIGHT);
-    model_hero_label = create_label(panel, 10, 28, 64, &lv_font_montserrat_24, COLOR_BRIGHT,
-                                    "--", LV_TEXT_ALIGN_AUTO);
-    create_label(panel, 78, 36, 0, &lv_font_montserrat_12, COLOR_MUTED, "tok/s out",
+    model_name_label = create_label(panel, 150, 6, 146, &lv_font_montserrat_12,
+                                    COLOR_MUTED, "", LV_TEXT_ALIGN_RIGHT);
+
+    create_label(panel, 8, 26, 0, &lv_font_montserrat_12, COLOR_MUTED, "THROUGHPUT",
                  LV_TEXT_ALIGN_AUTO);
-    model_in_label = create_label(panel, 10, 56, 130, &lv_font_montserrat_12, COLOR_MUTED,
-                                  "in -- tok/s", LV_TEXT_ALIGN_AUTO);
-    model_health_label = create_label(panel, 150, 28, 146, &lv_font_montserrat_12,
-                                      COLOR_BRIGHT, "run -- " MIDDOT " wait --\nTTFT -- " MIDDOT
-                                      " p95 --\nITL p95 --",
-                                      LV_TEXT_ALIGN_AUTO);
-    for (unsigned j = 0; j < 3; j++) {
-        const int y = 104 + (int)j * 18;
-        create_label(panel, 10, y, 76, &lv_font_montserrat_12, COLOR_MUTED, names[j],
-                     LV_TEXT_ALIGN_AUTO);
-        model_bar[j] = create_host_bar(panel, 88, y + 2, 168);
-        model_bar_value[j] = create_label(panel, 260, y, 36, &lv_font_montserrat_12,
-                                          COLOR_BRIGHT, "--", LV_TEXT_ALIGN_RIGHT);
-    }
+    model_hero_label = create_label(panel, 8, 38, 64, &lv_font_montserrat_24, COLOR_CYAN,
+                                    "--", LV_TEXT_ALIGN_AUTO);
+    create_label(panel, 74, 46, 0, &lv_font_montserrat_16, COLOR_CYAN, "tok/s",
+                 LV_TEXT_ALIGN_AUTO);
+    model_prompt_label = create_label(panel, 114, 42, 96, &lv_font_montserrat_16,
+                                      COLOR_BRIGHT, "", LV_TEXT_ALIGN_AUTO);
+    lv_label_set_recolor(model_prompt_label, true);
+
+    model_chip_label[0] = create_model_chip(panel, 212, 26, 42);
+    lv_label_set_text(model_chip_label[0], "run --");
+    model_chip_label[1] = create_model_chip(panel, 258, 26, 38);
+    lv_label_set_text(model_chip_label[1], "wait --");
+    model_chip_label[2] = create_model_chip(panel, 212, 48, 42);
+    lv_label_set_text(model_chip_label[2], "pre --");
+
+    create_label(panel, 8, 72, 0, &lv_font_montserrat_12, COLOR_MUTED, "LATENCY",
+                 LV_TEXT_ALIGN_AUTO);
+    create_label(panel, 8, 86, 0, &lv_font_montserrat_12, COLOR_MUTED, "TTFT",
+                 LV_TEXT_ALIGN_AUTO);
+    model_ttft_label = create_label(panel, 48, 84, 60, &lv_font_montserrat_16,
+                                    COLOR_BRIGHT, "--", LV_TEXT_ALIGN_AUTO);
+    create_label(panel, 122, 86, 0, &lv_font_montserrat_12, COLOR_MUTED, "p95",
+                 LV_TEXT_ALIGN_AUTO);
+    model_p95_label = create_label(panel, 154, 84, 60, &lv_font_montserrat_16,
+                                   COLOR_BRIGHT, "--", LV_TEXT_ALIGN_AUTO);
+    create_label(panel, 206, 86, 0, &lv_font_montserrat_12, COLOR_MUTED, "ITL",
+                 LV_TEXT_ALIGN_AUTO);
+    model_itl_label = create_label(panel, 230, 84, 66, &lv_font_montserrat_16,
+                                   COLOR_BRIGHT, "--", LV_TEXT_ALIGN_RIGHT);
+
+    create_label(panel, 8, 106, 0, &lv_font_montserrat_12, COLOR_MUTED, "EFFICIENCY",
+                 LV_TEXT_ALIGN_AUTO);
+    lv_obj_t *prefix_chip = create_panel(panel, 8, 120, 88, 16, COLOR_BAR_TRACK,
+                                         COLOR_BAR_TRACK);
+    lv_obj_set_style_radius(prefix_chip, 3, 0);
+    create_label(prefix_chip, 6, 2, 0, &lv_font_montserrat_12, COLOR_MUTED, "prefix",
+                 LV_TEXT_ALIGN_AUTO);
+    model_prefix_value = create_label(prefix_chip, 50, 2, 34, &lv_font_montserrat_12,
+                                      COLOR_GREEN, "--", LV_TEXT_ALIGN_RIGHT);
+    lv_obj_t *spec_chip = create_panel(panel, 96, 120, 88, 16, COLOR_BAR_TRACK,
+                                       COLOR_BAR_TRACK);
+    lv_obj_set_style_radius(spec_chip, 3, 0);
+    create_label(spec_chip, 6, 2, 0, &lv_font_montserrat_12, COLOR_MUTED, "spec",
+                 LV_TEXT_ALIGN_AUTO);
+    model_spec_value = create_label(spec_chip, 50, 2, 34, &lv_font_montserrat_12,
+                                    COLOR_CYAN, "--", LV_TEXT_ALIGN_RIGHT);
+    model_kv_label = create_label(panel, 188, 109, 100, &lv_font_montserrat_12, COLOR_AMBER,
+                                  "KV --", LV_TEXT_ALIGN_AUTO);
+    model_kv_bar = create_host_bar(panel, 188, 124, 100);
+    lv_obj_set_style_bg_color(model_kv_bar, lv_color_hex(COLOR_AMBER), LV_PART_INDICATOR);
 }
 
 static void create_fan_page(lv_obj_t *screen)
@@ -1012,66 +1073,92 @@ static void update_host_panel(unsigned index, cJSON *host)
 
 static void update_model_panel(cJSON *model)
 {
-    char text[128];
-    char value[24];
-    char line[48];
-    char itl[24];
+    char text[64];
     cJSON *healthy = cJSON_GetObjectItemCaseSensitive(model, "healthy");
-    const bool model_ok = cJSON_IsTrue(healthy);
-    lv_label_set_text(model_state_label, model_ok ? "MODEL ONLINE" : "MODEL DOWN");
+    const bool ok = cJSON_IsTrue(healthy);
+    lv_obj_set_style_bg_color(model_dot, lv_color_hex(ok ? COLOR_GREEN : COLOR_RED), 0);
+    lv_label_set_text(model_state_label, ok ? "ONLINE" : "OFFLINE");
     lv_obj_set_style_text_color(model_state_label,
-                                lv_color_hex(model_ok ? COLOR_GREEN : COLOR_RED), 0);
+                                lv_color_hex(ok ? COLOR_GREEN : COLOR_RED), 0);
     cJSON *name = cJSON_GetObjectItemCaseSensitive(model, "name");
     lv_label_set_text(model_name_label, cJSON_IsString(name) ? name->valuestring : "");
 
-    if (!model_ok) {
+    if (!ok) {
         lv_label_set_text(model_hero_label, "--");
-        lv_label_set_text(model_in_label, "in -- tok/s");
-        lv_label_set_text(model_health_label, "run -- " MIDDOT " wait --\nTTFT -- " MIDDOT
-                                              " p95 --\nITL p95 --");
-        for (unsigned j = 0; j < 3; j++) {
-            lv_bar_set_value(model_bar[j], 0, LV_ANIM_OFF);
-            lv_label_set_text(model_bar_value[j], "--");
+        lv_label_set_text(model_prompt_label, "");
+        for (unsigned i = 0; i < 3; i++) {
+            lv_label_set_text(model_chip_label[i], "--");
+            lv_obj_set_style_text_color(model_chip_label[i], lv_color_hex(COLOR_MUTED), 0);
         }
+        lv_label_set_text(model_ttft_label, "--");
+        lv_label_set_text(model_p95_label, "--");
+        lv_label_set_text(model_itl_label, "--");
+        lv_label_set_text(model_prefix_value, "--");
+        lv_label_set_text(model_spec_value, "--");
+        lv_label_set_text(model_kv_label, "KV --");
+        lv_bar_set_value(model_kv_bar, 0, LV_ANIM_OFF);
         return;
     }
 
     snprintf(text, sizeof(text), "%.1f", json_number(model, "generation_tps", 0));
     lv_label_set_text(model_hero_label, text);
-    snprintf(text, sizeof(text), "in %.1f tok/s", json_number(model, "prompt_tps", 0));
-    lv_label_set_text(model_in_label, text);
+    snprintf(text, sizeof(text), "#8ba8b7 in #e6f1f5 %.1f# #8ba8b7 tok/s#",
+             json_number(model, "prompt_tps", 0));
+    lv_label_set_text(model_prompt_label, text);
+
+    const double running = json_number(model, "running", 0);
+    const double waiting = json_number(model, "waiting", 0);
+    const double preemptions = json_number(model, "preemptions_total", 0);
+    snprintf(text, sizeof(text), "run %.0f", running);
+    lv_label_set_text(model_chip_label[0], text);
+    lv_obj_set_style_text_color(model_chip_label[0], lv_color_hex(COLOR_GREEN), 0);
+    snprintf(text, sizeof(text), "wait %.0f", waiting);
+    lv_label_set_text(model_chip_label[1], text);
+    lv_obj_set_style_text_color(model_chip_label[1],
+                                lv_color_hex(waiting > 0 ? COLOR_AMBER : COLOR_MUTED), 0);
+    snprintf(text, sizeof(text), "pre %.0f", preemptions);
+    lv_label_set_text(model_chip_label[2], text);
+    lv_obj_set_style_text_color(model_chip_label[2],
+                                lv_color_hex(preemptions > 0 ? COLOR_RED : COLOR_GREEN), 0);
 
     const double ttft = json_number(model, "ttft_ms", -1);
-    const double ttft_p95 = json_number(model, "ttft_p95_ms", -1);
-    if (ttft >= 0 && ttft_p95 >= 0) {
-        snprintf(line, sizeof(line), "TTFT %.1fs " MIDDOT " p95 %.1fs", ttft / 1000.0,
-                 ttft_p95 / 1000.0);
+    if (ttft >= 0) {
+        snprintf(text, sizeof(text), "%.2fs", ttft / 1000.0);
+        lv_label_set_text(model_ttft_label, text);
     } else {
-        strlcpy(line, "TTFT --", sizeof(line));
+        lv_label_set_text(model_ttft_label, "--");
+    }
+    const double ttft_p95 = json_number(model, "ttft_p95_ms", -1);
+    if (ttft_p95 >= 0) {
+        snprintf(text, sizeof(text), "%.2fs", ttft_p95 / 1000.0);
+        lv_label_set_text(model_p95_label, text);
+    } else {
+        lv_label_set_text(model_p95_label, "--");
     }
     const double itl_p95 = json_number(model, "itl_p95_ms", -1);
     if (itl_p95 >= 0) {
-        snprintf(itl, sizeof(itl), "ITL p95 %.0fms", itl_p95);
+        snprintf(text, sizeof(text), "%.0fms", itl_p95);
+        lv_label_set_text(model_itl_label, text);
     } else {
-        strlcpy(itl, "ITL p95 --", sizeof(itl));
+        lv_label_set_text(model_itl_label, "--");
     }
-    snprintf(text, sizeof(text), "run %.0f " MIDDOT " wait %.0f\n%s\n%s",
-             json_number(model, "running", 0), json_number(model, "waiting", 0), line, itl);
-    lv_label_set_text(model_health_label, text);
+
+    const double prefix = json_number(model, "prefix_cache_hit_pct", -1);
+    format_pct(text, sizeof(text), prefix, 0);
+    lv_label_set_text(model_prefix_value, text);
+    const double spec = json_number(model, "spec_accept_pct", -1);
+    format_pct(text, sizeof(text), spec, 0);
+    lv_label_set_text(model_spec_value, text);
 
     const double kv = json_number(model, "kv_pct", -1);
     if (kv >= 0) {
-        snprintf(value, sizeof(value), "%.1f%%", kv);
+        snprintf(text, sizeof(text), "KV %.1f%%", kv);
+        lv_label_set_text(model_kv_label, text);
+        lv_bar_set_value(model_kv_bar, (int32_t)(kv + 0.5), LV_ANIM_OFF);
     } else {
-        strlcpy(value, "--", sizeof(value));
+        lv_label_set_text(model_kv_label, "KV --");
+        lv_bar_set_value(model_kv_bar, 0, LV_ANIM_OFF);
     }
-    set_bar_value(model_bar[0], model_bar_value[0], kv, COLOR_CYAN, value);
-    const double prefix = json_number(model, "prefix_cache_hit_pct", -1);
-    format_pct(value, sizeof(value), prefix, 0);
-    set_bar_value(model_bar[1], model_bar_value[1], prefix, COLOR_CYAN, value);
-    const double spec = json_number(model, "spec_accept_pct", -1);
-    format_pct(value, sizeof(value), spec, 0);
-    set_bar_value(model_bar[2], model_bar_value[2], spec, COLOR_CYAN, value);
 }
 
 static void update_dashboard(const char *json)
