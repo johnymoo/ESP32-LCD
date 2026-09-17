@@ -55,6 +55,7 @@
 #define COLOR_BANNER_BG 0x3A1720
 
 #define DEGREE_C "\xC2\xB0" "C"
+#define DEGREE_SYMBOL "\xC2\xB0"
 #define BULLET "\xE2\x80\xA2"
 /* U+00B7 is not in the built-in Montserrat charset (it renders as a box);
  * reuse the bullet glyph, which LVGL ships and the UI has used before. */
@@ -561,29 +562,29 @@ static void create_system_page(lv_obj_t *screen)
 
     for (unsigned i = 0; i < 2; i++) {
         const int x = i == 0 ? 8 : 164;
-        lv_obj_t *panel = create_panel(page, x, 28, 148, 140, COLOR_PANEL, COLOR_BORDER);
-        create_label(panel, 8, 6, 0, &lv_font_montserrat_12, COLOR_CYAN, names[i],
+        lv_obj_t *panel = create_panel(page, x, 28, 148, 142, COLOR_PANEL, COLOR_BORDER);
+        create_label(panel, 8, 3, 0, &lv_font_montserrat_12, COLOR_CYAN, names[i],
                      LV_TEXT_ALIGN_AUTO);
-        host_thr[i] = create_label(panel, 64, 7, 27, &lv_font_montserrat_12, COLOR_DARK,
+        host_thr[i] = create_label(panel, 64, 4, 27, &lv_font_montserrat_12, COLOR_DARK,
                                    "THR", LV_TEXT_ALIGN_CENTER);
         lv_obj_set_style_bg_opa(host_thr[i], LV_OPA_COVER, 0);
         lv_obj_set_style_bg_color(host_thr[i], lv_color_hex(COLOR_AMBER), 0);
         lv_obj_set_style_radius(host_thr[i], 3, 0);
         lv_obj_add_flag(host_thr[i], LV_OBJ_FLAG_HIDDEN);
 
-        host_hero[i] = create_label(panel, 8, 22, 64, &lv_font_montserrat_24, COLOR_BRIGHT,
+        host_hero[i] = create_label(panel, 8, 18, 64, &lv_font_montserrat_20, COLOR_BRIGHT,
                                     "--", LV_TEXT_ALIGN_AUTO);
-        host_temp_label[i] = create_label(panel, 74, 26, 70, &lv_font_montserrat_16,
+        host_temp_label[i] = create_label(panel, 72, 26, 68, &lv_font_montserrat_12,
                                           COLOR_BRIGHT, "GPU --", LV_TEXT_ALIGN_AUTO);
         for (unsigned j = 0; j < 6; j++) {
-            const int y = 56 + (int)j * 15;
+            const int y = 44 + (int)j * 13;
             create_label(panel, 8, y, 0, &lv_font_montserrat_12, COLOR_MUTED, k_bar_name[j],
                          LV_TEXT_ALIGN_AUTO);
-            host_bar[i][j] = create_host_bar(panel, 40, y + 2, 72);
+            host_bar[i][j] = create_host_bar(panel, 40, y + 1, 72);
             host_bar_value[i][j] = create_label(panel, 114, y, 26, &lv_font_montserrat_12,
                                                 COLOR_CYAN, "--", LV_TEXT_ALIGN_RIGHT);
         }
-        host_foot[i] = create_label(panel, 8, 148, 136, &lv_font_montserrat_12, COLOR_MUTED,
+        host_foot[i] = create_label(panel, 8, 126, 136, &lv_font_montserrat_12, COLOR_MUTED,
                                     "--", LV_TEXT_ALIGN_AUTO);
     }
 }
@@ -955,7 +956,7 @@ static void update_host_panel(unsigned index, cJSON *host)
         lv_label_set_text(host_hero[index], "--");
     }
     if (temp >= 0) {
-        snprintf(text, sizeof(text), "GPU %.0f" DEGREE_C, temp);
+        snprintf(text, sizeof(text), "GPU %.0f" DEGREE_SYMBOL, temp);
         lv_label_set_text(host_temp_label[index], text);
     } else {
         lv_label_set_text(host_temp_label[index], "GPU --");
