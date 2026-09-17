@@ -53,6 +53,16 @@ LEDC 低速模式 TIMER_0/CHANNEL_0——背光在 app_main 里后初始化并�
 → endpoint-timeout → cleared）与设计一致，全程背光不受影响，见
 `docs/evidence/20260917-backlight-ledc-fix.txt`。
 
+### 追记二：STOP 档"最低转速不停转"
+
+更换风扇实测点 STOP 后仍保持约 300 RPM。固件侧原因：原实现 STOP 用
+duty 1023/1024 ≈ 99.9% 高电平，每 40 µs 周期仍有 1 tick 低脉冲，反相后
+风扇收到约 0.1% 占空比，部分风扇将其解释为最低转速底限而非停转。修复：
+STOP 时 `ledc_stop` 关断波形并把 GPIO1 钳在恒定高（风扇线持续拉低），
+恢复运行档时重新 `ledc_channel_config` 使能输出。若风扇本身不支持
+0% 占空比停转（Intel 规范允许低占空比仅降到下限），固件恒低也停不下来，
+彻底停转需切断风扇供电——待实机复测确认属于哪一种。
+
 ## 待新风扇到位后的遗留项
 
 1. 校准扫描（全速参考 RPM、各档实测转速、kick-start 最低占空比），

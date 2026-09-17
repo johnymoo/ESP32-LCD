@@ -64,10 +64,37 @@ static void IRAM_ATTR fan_tach_isr(void *argument)
     portEXIT_CRITICAL_ISR(&s_tach_mux);
 }
 
+static const ledc_channel_config_t s_pwm_channel = {
+    .gpio_num = FAN_PWM_GPIO,
+    .speed_mode = LEDC_LOW_SPEED_MODE,
+    .channel = FAN_PWM_CHANNEL,
+    .intr_type = LEDC_INTR_DISABLE,
+    .timer_sel = FAN_PWM_TIMER,
+    .duty = 0,
+    .hpoint = 0,
+    .flags = {.output_invert = 0},
+};
+
 /* The carrier inverts the PWM sense: GPIO1 high turns Q1 on and pulls the fan
  * PWM line low, so the effective fan duty is 100 minus the GPIO1 duty. */
 static void fan_apply_level(uint8_t level)
 {
+    static bool stopped;
+    if (level == 0) {
+        /* Max LEDC duty still emits a 1-tick low blip every cycle, which some
+         * fans interpret as a minimum-speed command instead of stop. Gate the
+         * generator off and hold GPIO1 high so the fan line sits solid low. */
+        if (!stopped) {
+            ESP_ERROR_CHECK(ledc_stop(LEDC_LOW_SPEED_MODE, FAN_PWM_CHANNEL, 1));
+            stopped = true;
+        }
+        return;
+    }
+    if (stopped) {
+        /* ledc_stop disabled the output; a full channel config re-arms it. */
+        ESP_ERROR_CHECK(ledc_channel_config(&s_pwm_channel));
+        stopped = false;
+    }
     const uint32_t gpio_duty = (uint32_t)(FAN_PWM_MAX_DUTY * (100u - level)) / 100U;
     ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, FAN_PWM_CHANNEL, gpio_duty));
     ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, FAN_PWM_CHANNEL));
@@ -339,17 +366,7 @@ void fan_control_init(void)
     };
     ESP_ERROR_CHECK(ledc_timer_config(&timer_config));
 
-    const ledc_channel_config_t channel_config = {
-        .gpio_num = FAN_PWM_GPIO,
-        .speed_mode = LEDC_LOW_SPEED_MODE,
-        .channel = FAN_PWM_CHANNEL,
-        .intr_type = LEDC_INTR_DISABLE,
-        .timer_sel = FAN_PWM_TIMER,
-        .duty = 0,
-        .hpoint = 0,
-        .flags = {.output_invert = 0},
-    };
-    ESP_ERROR_CHECK(ledc_channel_config(&channel_config));
+    ESP_ERROR_CHECK(ledc_channel_config(&s_pwm_channel));
 
     const gpio_config_t tach_config = {
         .pin_bit_mask = (1ULL << FAN_TACH1_GPIO) | (1ULL << FAN_TACH2_GPIO),
