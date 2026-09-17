@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ESP32 Fan Control Console · r3</title>
+<style>
+:root{color-scheme:dark;--bg:#08141d;--surface:#102633;--surface2:#173444;--line:#2b5263;--text:#e7f3f5;--muted:#8aaab3;--cyan:#73e3d0;--amber:#ffc66d;--red:#ff7d83;--green:#8ee3a2;--blue:#8fc8ff;--font:Inter,ui-sans-serif,system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 20% 0,#143849 0,#08141d 52%);font-family:var(--font);color:var(--text);min-height:100vh}.review{max-width:1120px;margin:0 auto;padding:28px}.review h1{font-size:22px;font-weight:600;margin:0 0 6px}.review p{color:var(--muted);margin:0 0 20px;font-size:14px}.layout{display:grid;grid-template-columns:420px 1fr;gap:22px;align-items:start}.device-shell{background:#061018;border:1px solid #2c4e5c;border-radius:22px;padding:28px 28px 34px;box-shadow:0 24px 80px #0008}.device-top{font-size:11px;letter-spacing:.12em;color:#6f929e;margin:0 0 10px}.lcd{width:320px;height:172px;background:#091a24;border:3px solid #243f49;border-radius:5px;overflow:hidden;position:relative;box-shadow:inset 0 0 0 1px #000,0 0 0 1px #061018}.lcd *{font-family:var(--font)}.screen{display:none;height:100%;padding:7px 8px}.screen.active{display:block}.lcd-title{display:flex;justify-content:space-between;color:var(--cyan);font-size:13px;font-weight:600;margin-bottom:5px}.lcd-sub{color:var(--muted);font-size:9px}.host-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}.host{border:1px solid var(--line);background:#112b38;padding:5px 6px;border-radius:3px}.host-name{font-size:9px;color:var(--muted)}.host-temp{font-size:22px;color:var(--text);line-height:1.05;font-variant-numeric:tabular-nums}.host-temp span{font-size:10px;color:var(--muted)}.host-meta{font-size:8px;color:var(--muted);margin-top:3px}.control-line{display:flex;align-items:center;justify-content:space-between;margin-top:6px;border-top:1px solid #234452;padding-top:5px;font-size:9px}.stage{color:var(--amber);font-weight:600}.rpm-row{display:flex;gap:6px;margin-top:7px}.rpm{flex:1;background:#0d222d;border:1px solid #234452;padding:4px 6px;border-radius:3px;font-size:8px;color:var(--muted)}.rpm strong{display:block;color:var(--text);font-size:13px;font-variant-numeric:tabular-nums}.rpm-bar{height:3px;background:#254552;margin-top:3px}.rpm-bar i{display:block;height:100%;background:var(--cyan)}.bottom-nav{display:flex;gap:5px;margin-top:7px}.lcd button{border:1px solid #315a6a;background:#112e3b;color:var(--muted);font-size:9px;padding:5px 8px;border-radius:3px}.lcd button.active{color:#061018;background:var(--cyan);border-color:var(--cyan);font-weight:700}.curve{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:4px}.curve-row{border:1px solid #294f5e;background:#102a36;padding:4px 5px;border-radius:3px;display:flex;justify-content:space-between;font-size:8px}.curve-row b{color:var(--text)}.curve-row em{color:var(--cyan);font-style:normal}.lcd-note{position:absolute;bottom:6px;left:8px;right:8px;color:var(--muted);font-size:8px}.control-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:9px}.control-grid button{min-height:30px}.control-grid button.selected{background:var(--cyan);color:#061018;border-color:var(--cyan);font-weight:700}.edit-title{display:flex;justify-content:space-between;align-items:center}.edit-list{margin-top:3px}.edit-row{display:grid;grid-template-columns:45px 1fr 26px 34px 26px;gap:3px;align-items:center;margin:2px 0;font-size:8px}.edit-row button{padding:3px 0}.edit-row .value{text-align:center;color:var(--amber);font-size:10px}.edit-actions{display:flex;gap:5px;margin-top:6px}.edit-actions button{flex:1}.side{background:#0d202b;border:1px solid #254553;border-radius:12px;padding:18px}.side h2{font-size:15px;margin:0 0 12px}.side h3{font-size:12px;color:var(--cyan);margin:18px 0 7px}.side-row{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #203d49;padding:8px 0;font-size:13px}.side-row span:first-child{color:var(--muted)}.side-row strong{font-variant-numeric:tabular-nums}.side button,.side input{font:inherit}.side button{background:#173747;border:1px solid #315a6a;color:var(--text);border-radius:5px;padding:7px 10px;cursor:pointer}.side button:hover{border-color:var(--cyan)}.side button.warn{color:var(--amber)}.side .seg{display:flex;gap:5px;margin:8px 0}.side .seg button.active{background:var(--cyan);color:#061018;border-color:var(--cyan)}input[type=range]{width:100%;accent-color:var(--cyan)}.notice{border-left:3px solid var(--amber);background:#2d281a;color:#f3d69b;padding:9px 10px;font-size:12px;line-height:1.45;margin-top:14px}.notice strong{color:#ffe0a2}.legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}.pill{font-size:11px;border:1px solid #315a6a;padding:4px 7px;border-radius:99px;color:var(--muted)}.pill.ok{color:var(--green);border-color:#39734d}.pill.warn{color:var(--amber);border-color:#76592c}.event{font-size:12px;color:var(--muted);margin-top:13px;min-height:18px}.small{font-size:11px;color:var(--muted);line-height:1.45}@media(max-width:820px){.review{padding:18px}.layout{grid-template-columns:1fr}.device-shell{justify-self:center}}
+.design-notes{margin-top:22px;background:#0d202b;border:1px solid #254553;border-radius:12px;padding:18px}.design-notes h2{font-size:15px;margin:0 0 12px}.flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;color:var(--cyan);font-size:12px}.flow span{border:1px solid #315a6a;border-radius:6px;padding:7px 9px;background:#102a36}.flow b{color:var(--amber)}.notes-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:15px}.notes-grid h3{font-size:12px;color:var(--cyan);margin:0 0 5px}.notes-grid p{font-size:12px;line-height:1.5;color:var(--muted);margin:0}@media(max-width:820px){.notes-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="review">
+  <h1>ESP32 双 GB10 风扇控制台 · 高保真原型 r3</h1>
+  <p>点击 LCD 内的触摸按钮切换页面；右侧模拟温度、硬件版本和自动/手动控制。原型按现有 Rev B 的共用 PWM 设计，两个风扇同步调速、分别显示 RPM。</p>
+  <div class="layout">
+    <div class="device-shell">
+      <div class="device-top">ESP32-S3-TOUCH-LCD · 320 × 172</div>
+      <div class="lcd" id="fan-console">
+        <section class="screen active" data-screen="system">
+          <div class="lcd-title"><span>SYSTEM LOAD</span><span class="lcd-sub">1/3 · AUTO</span></div>
+          <div class="host-grid"><div class="host"><div class="host-name">GB10 HEAD</div><div class="host-temp">52<span>°C</span></div><div class="host-meta">GPU 61% · LOAD 3.2</div></div><div class="host"><div class="host-name">GB10 WORKER</div><div class="host-temp">59<span>°C</span></div><div class="host-meta">GPU 74% · LOAD 5.1</div></div></div>
+          <div class="control-line"><span>RAM 48% / 62%</span><span>WiFi <b class="stage">OK</b></span></div>
+          <div class="lcd-note">点击屏幕切换监控页 · 自动轮换仅作用于本页和模型页</div>
+          <div class="bottom-nav"><button class="active" data-go="system">系统</button><button data-go="model">模型</button><button data-go="fan">风扇</button></div>
+        </section>
+        <section class="screen" data-screen="model">
+          <div class="lcd-title"><span>MODEL INFERENCE</span><span class="lcd-sub">2/3</span></div>
+          <div class="host"><div class="host-name">DEEPSEEK SERVICE</div><div class="host-temp" style="font-size:20px;color:var(--green)">MODEL ONLINE</div><div class="host-meta">RUN 2 · WAIT 1 · KV 38%</div></div>
+          <div class="control-line"><span>IN 42 tok/s</span><span>OUT 18 tok/s</span></div>
+          <div class="lcd-note">保留现有模型监控页和点击切换行为</div>
+          <div class="bottom-nav"><button data-go="system">系统</button><button class="active" data-go="model">模型</button><button data-go="fan">风扇</button></div>
+        </section>
+        <section class="screen" data-screen="fan">
+          <div class="lcd-title"><span>FAN STATUS</span><span class="lcd-sub">3/3 · GPIO1 <button data-go="settings">设置</button></span></div>
+          <div class="control-line"><span>控制温度 <b id="controlTemp">59°C</b></span><span>共享档位 <b class="stage" id="stageLabel">LOW · 35%</b></span></div>
+          <div class="rpm-row"><div class="rpm">FAN1<strong id="fan1Rpm">1011</strong><div class="rpm-bar"><i style="width:35%"></i></div><span>参考 1500</span></div><div class="rpm">FAN2<strong id="fan2Rpm">1004</strong><div class="rpm-bar"><i style="width:35%"></i></div><span>参考 1300</span></div></div>
+          <div class="control-line"><span>PWM <b id="pwmLabel">35%</b></span><span>TACH1/2 <b class="stage">OK / OK</b></span></div>
+          <div class="bottom-nav"><button data-go="system">系统</button><button data-go="model">模型</button><button class="active" data-go="fan">风扇</button></div>
+        </section>
+        <section class="screen" data-screen="settings">
+          <div class="lcd-title"><span>FAN SETTINGS</span><span class="lcd-sub">SETUP · NVS</span></div>
+          <div class="bottom-nav"><button class="active" data-setting="curve">曲线</button><button data-setting="calibration">校准</button><button data-setting="mode">模式</button></div>
+          <div id="settingsBody"><div class="curve" id="globalCurve"></div></div>
+          <div class="lcd-note">共享 PWM · 保存后重启仍保留</div>
+          <div class="bottom-nav"><button class="active" data-go="fan">返回风扇状态</button></div>
+        </section>
+        <section class="screen" data-screen="edit">
+          <div class="lcd-title edit-title"><span id="editTitle">EDIT GLOBAL · LOW</span><span class="lcd-sub">触摸调整</span></div><div class="edit-list" id="editList"></div><div class="edit-actions"><button id="cancelEdit">取消</button><button class="active" id="saveEdit">保存</button></div>
+        </section>
+      </div>
+    </div>
+    <aside class="side">
+      <h2>交互评审控制台</h2>
+      <div class="side-row"><span>模拟控制温度</span><strong id="simTempValue">59°C</strong></div>
+      <input id="simTemp" type="range" min="25" max="85" value="59" aria-label="模拟控制温度">
+      <div class="side-row"><span>硬件模式</span><strong id="hardwareLabel">GPIO1 · 共用 PWM</strong></div>
+      <div class="side-row"><span>当前预览</span><strong id="previewLabel">SYSTEM LOAD</strong></div>
+      <div class="notice" id="hardwareNotice"><strong>当前设计：</strong>两台 GB10 取最高温度，GPIO1 输出一条共享 PWM；两只风扇同步调速，但 FAN1/FAN2 RPM 独立显示。</div>
+      <h3>建议默认档位与校准</h3>
+      <div class="side-row"><span>STOP</span><strong>≤ 45°C · 0%</strong></div><div class="side-row"><span>LOW</span><strong>46–55°C · 35%</strong></div><div class="side-row"><span>MED</span><strong>56–65°C · 65%</strong></div><div class="side-row"><span>HIGH</span><strong>≥ 66°C · 100%</strong></div>
+      <div class="side-row"><span>FAN1 全速参考</span><strong>1500 RPM</strong></div><div class="side-row"><span>FAN2 全速参考</span><strong>1300 RPM</strong></div><div class="legend"><span class="pill ok">状态正常</span><span class="pill warn">回差 3°C</span><span class="pill">启动 kick-start 1s</span></div>
+      <div class="event" id="event" aria-live="polite">点击“设置”进入共享曲线、校准和控制模式。</div>
+    </aside>
+  </div>
+  <section class="design-notes">
+    <h2>设计结构与待确认规则</h2>
+    <div class="flow"><span>GB10 Head / Worker</span><b>→</b><span>HTTP 状态采样</span><b>→</b><span>最高温度 + 回差</span><b>→</b><span>GPIO1 共享 PWM</span></div>
+    <div class="notes-grid"><div><h3>触摸路径</h3><p>系统/模型 → 风扇 → 右上角设置；设置内分为曲线、校准、模式，手动模式重启后退出。</p></div><div><h3>安全路径</h3><p>温度或网络失效时显示故障并全速回退；停止转动后重新启动先全速 1 秒。</p></div><div><h3>硬件边界</h3><p>现有 Rev B 的 GPIO1 同时控制两只风扇；两路 TACH 仍独立用于 RPM 显示。</p></div></div>
+  </section>
+</div>
+<script>
+const stages=['STOP','LOW','MED','HIGH'], levels=[0,35,65,100];
+const cfg=[45,55,65,85], refs={fan1:1500,fan2:1300};
+let editStage=1, mode='auto', setting='curve';
+const $=s=>document.querySelector(s); const $$=s=>[...document.querySelectorAll(s)];
+function stageFor(t){for(let i=0;i<4;i++) if(t<=cfg[i]) return i; return 3}
+function renderCurve(){$('#globalCurve').innerHTML=stages.map((s,i)=>`<button class="curve-row" data-edit="${i}"><b>${s}</b><em>${levels[i]}% · ≤${cfg[i]}°C</em></button>`).join('')}
+function renderSettings(){if(setting==='curve'){renderCurve();return}if(setting==='calibration'){$('#settingsBody').innerHTML=`<div class="curve"><div class="curve-row"><b>FAN1 全速</b><em>${refs.fan1} RPM</em></div><div class="curve-row"><b>FAN2 全速</b><em>${refs.fan2} RPM</em></div></div><div class="lcd-note">仅用于相对转速和测速异常判断</div>`;return}$('#settingsBody').innerHTML='<div class="control-grid"><button class="selected" data-mode="auto">自动</button><button data-mode="manual">手动</button><button data-stage="0">STOP</button><button data-stage="1">LOW</button><button data-stage="2">MED</button><button data-stage="3">HIGH</button></div>'}
+function show(screen){$$('.screen').forEach(x=>x.classList.toggle('active',x.dataset.screen===screen));$('#previewLabel').textContent={system:'SYSTEM LOAD',model:'MODEL INFERENCE',fan:'FAN STATUS',settings:'FAN SETTINGS',edit:'档位编辑'}[screen]||screen; if(screen==='settings')renderSettings();}
+function renderEdit(){const idx=editStage; $('#editTitle').textContent=`EDIT GLOBAL · ${stages[idx]}`; $('#editList').innerHTML=`<div class="edit-row"><span>上限温度</span><button data-edit-delta="-1">−</button><span class="value">${cfg[idx]}°C</span><button data-edit-delta="1">+</button><span>边界</span></div><div class="edit-row"><span>占空比</span><button disabled>−</button><span class="value">${levels[idx]}%</span><button disabled>+</button><span>固定</span></div>`}
+function updateStatus(t){$('#simTempValue').textContent=t+'°C';$('#controlTemp').textContent=t+'°C';const i=stageFor(t);$('#stageLabel').textContent=`${stages[i]} · ${levels[i]}%`;$('#pwmLabel').textContent=levels[i]+'%';$('#fan1Rpm').textContent=Math.round(levels[i]*28.8);$('#fan2Rpm').textContent=Math.round(levels[i]*28.4);$$('.rpm-bar i').forEach(x=>x.style.width=levels[i]+'%');}
+$('#simTemp').addEventListener('input',e=>updateStatus(+e.target.value));
+document.addEventListener('click',e=>{const go=e.target.closest('[data-go]');if(go){show(go.dataset.go);return}const stg=e.target.closest('[data-setting]');if(stg){setting=stg.dataset.setting;$$('[data-setting]').forEach(x=>x.classList.toggle('active',x.dataset.setting===setting));renderSettings();return}const edit=e.target.closest('[data-edit]');if(edit){editStage=+edit.dataset.edit;renderEdit();show('edit');return}const delta=e.target.closest('[data-edit-delta]');if(delta){cfg[editStage]=Math.max(20,Math.min(95,cfg[editStage]+(+delta.dataset.editDelta)));renderEdit();return}if(e.target.id==='cancelEdit'){show('settings');return}if(e.target.id==='saveEdit'){$('#event').textContent=`共享曲线 · ${stages[editStage]} 已保存到本机配置`;show('settings');renderCurve();return}const m=e.target.closest('[data-mode]');if(m){mode=m.dataset.mode;$$('[data-mode]').forEach(x=>x.classList.toggle('selected',x.dataset.mode===mode));$('#event').textContent=mode==='manual'?'手动模式：两只风扇同步测试；重启后回到自动':'自动模式：按共享曲线控制两只风扇';return}const st=e.target.closest('[data-stage]');if(st){$('#event').textContent=`手动测试档位：${stages[+st.dataset.stage]} · 两只风扇同步 · ${levels[+st.dataset.stage]}%`;return}});
+renderCurve();updateStatus(59);
+</script>
+</body>
+</html>

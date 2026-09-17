@@ -1,0 +1,18 @@
+Fault injection: unreachable status endpoint, GB10-2, 2026-09-16.
+
+Method: rebuild with CLUSTER_STATUS_URL pointed at tcp/9908 (no listener),
+flash, capture 30 s, then restore the production URL, rebuild and reflash.
+Both fans were unplugged, so "full speed" is the commanded PWM state only.
+
+Relevant serial lines:
+
+W (2684) fan_control: fault temp-invalid, fans forced to full speed
+W (2714) cluster_display: status fetch failed: ESP_ERR_HTTP_CONNECT
+W (4734) cluster_display: status fetch failed: ESP_ERR_HTTP_CONNECT
+(further identical failures every ~2 s through the window; no crash)
+
+After restoring the production URL the device booted, cleared the fault on
+the first valid sample, and resumed the auto curve (LOW at ctrl 47 C); see
+20260916-fan-control-boot.txt. The immediate per-sample fail path is covered
+here; the 10 s staleness watchdog in fan_control recompute_fault() reuses the
+same forced-full-speed branch and was verified by code review.

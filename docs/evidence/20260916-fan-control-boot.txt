@@ -1,0 +1,22 @@
+Fan control firmware first boot, GB10-2, 2026-09-16.
+
+Setup: ESP32-S3-Touch-LCD on gb10-2 at /dev/ttyACM0 (by-id path), both fans
+unplugged (stock 6 cm fans removed for noise; replacements pending). Build
+from this branch, image size 0x12b810; flash hash verification passed. The
+status service on gb10 already served nvme_temp_c and uptime_s fields.
+
+Relevant serial lines (50 s window, 2 s status refresh):
+
+I (920) fan_control: ready: PWM=GPIO1 25kHz shared, TACH1=GPIO2, TACH2=GPIO4, bounds 45/55/65/85 C, refs 1500/1500 RPM
+I (303) octal_psram: vendor id    : 0x0d (AP)
+W (2690) fan_control: fault temp-invalid, fans forced to full speed
+I (2690) cluster_display: WiFi connected: 192.168.88.143
+I (3200) fan_control: initial stage 1 (ctrl 49C)
+I (3210) fan_control: fault cleared, resume auto
+I (3210) cluster_display: cluster status updated
+(23 status updates in the window, no Guru Meditation, aborts, or bus errors)
+
+Interpretation: NVS defaults loaded on first boot; the boot fail-safe holds
+full speed until the first valid sample; the shared curve then selected LOW
+(35%) for a 49 C control temperature and the fault flag cleared. Status
+refresh runs at the new 2 s cadence.

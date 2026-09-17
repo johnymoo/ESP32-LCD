@@ -80,14 +80,16 @@ Keep local changes to vendor components small and document why they are needed.
 
 ## Dashboard and status service
 
-The firmware reads `http://192.168.88.181:9108/status` every five seconds. The
-browser mirror is served at `http://192.168.88.181:9108/` and refreshes every
-two seconds. The service is deployed on `gb10` as the user unit
+The firmware reads `http://192.168.88.181:9108/status` every two seconds. The
+browser mirror is served at `http://192.168.88.181:9108/` and refreshes on the
+same cadence. The service is deployed on `gb10` as the user unit
 `cluster-display-status.service`.
 
 The status service is read-only. Do not restart, stop, or reconfigure Qwen,
 DeepSeek, trading, lexdata, or unrelated GB10 workloads while changing the
-display. GPU memory fields are unavailable on GB10 and must not be invented.
+display. On GB10 `nvidia-smi` reports `memory.used`/`memory.total` as `N/A`;
+the only verified GPU memory source is the `--query-compute-apps` sum
+(`gpu_mem_mb` in the status payload). Never invent other GPU memory fields.
 
 ## Secrets and generated files
 

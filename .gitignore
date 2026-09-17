@@ -8,3 +8,8 @@ vendor/waveshare/downloads/*.zip
 firmware/touch-demo/main/wifi_credentials.h
 __pycache__/
 *.pyc
+
+/planning/01-raw/
+
+/tmp/
+.DS_Store

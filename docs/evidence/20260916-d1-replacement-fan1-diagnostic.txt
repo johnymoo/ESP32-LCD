@@ -1,0 +1,21 @@
+Rev B FAN1 retest after D1 replacement, GB10-2, 2026-09-16.
+
+Setup: independent 12 V connected; ESP32 USB connected; the same fan moved from
+FAN2 to FAN1. Diagnostic firmware was flashed successfully.
+
+Relevant serial lines:
+
+I (...) cluster_display: fan diagnostic: release levels tach1=1 tach2=1
+I (...) cluster_display: fan diagnostic: phase=FULL_SPEED tach1=228 pulses rpm1=1368 level=0, tach2=0 pulses rpm2=0 level=1, pwm_level=0
+I (...) cluster_display: fan diagnostic: PWM HALF_SPEED (GPIO1 high=50%; fan duty is inverted)
+I (...) cluster_display: fan diagnostic: phase=HALF_SPEED tach1=169 pulses rpm1=1011 level=0, tach2=0 pulses rpm2=0 level=1, pwm_level=0
+
+Interpretation: FAN1 starts and spins; TACH1 produces nonzero pulses; the measured
+RPM decreases under the half-speed command. FAN2/TACH2 was intentionally left
+unconnected in this run. Together with the FAN2 run in
+20260916-d1-replacement-fan2-diagnostic.txt, both connector channels have now been
+verified for power, shared PWM control, and independent tach sensing.
+
+After the diagnostic run, the display firmware was restored and flashed successfully.
+Boot verification reported app version 1811a2d-dirty and the normal dashboard startup;
+no fan diagnostic log appeared.
