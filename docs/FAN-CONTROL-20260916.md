@@ -41,6 +41,18 @@ FAN STATUS 顶部显示红色故障条，恢复后自动回曲线。这是 FANCT
 - 已确认的九屏效果图：`output/review/fan-console-*.png`（320×172 像素级，
   与 LVGL 布局坐标一一对应）
 
+## 2026-09-17 追记：黑屏事故与 LEDC 通道冲突修复
+
+实机偶发"整屏变黑但固件仍在运行"。根因：风扇 PWM 与 BSP 背光共用了
+LEDC 低速模式 TIMER_0/CHANNEL_0——背光在 app_main 里后初始化并抢占该
+通道，此后 `fan_apply_level()` 的每次 duty 写入同时落在背光上；任何
+风扇全速请求（手动 HIGH、STOP→运行 kick-start、故障强制全速）都会把
+背光 duty 写成 0，直接黑屏。修复 77a1d15 将风扇 PWM 迁移到专用的
+`LEDC_TIMER_1`/`LEDC_CHANNEL_1`（GPIO1 引脚不变），初始化顺序不再影响
+结果。复测：停止状态服务 21 s 强制全速回退，故障三段转换（temp-invalid
+→ endpoint-timeout → cleared）与设计一致，全程背光不受影响，见
+`docs/evidence/20260917-backlight-ledc-fix.txt`。
+
 ## 待新风扇到位后的遗留项
 
 1. 校准扫描（全速参考 RPM、各档实测转速、kick-start 最低占空比），

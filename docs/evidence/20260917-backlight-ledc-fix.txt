@@ -1,0 +1,30 @@
+Backlight blackout fix verification (2026-09-17)
+=================================================
+
+Incident: the panel went dark while the firmware kept running. Root cause:
+the fan PWM and the BSP backlight were both configured on LEDC low-speed
+TIMER_0/CHANNEL_0. The backlight claimed the channel later at boot, so every
+fan duty write landed on the backlight pin as well; any full-speed fan
+request (MANUAL HIGH, kick-start, fault fallback) wrote backlight duty 0
+and blanked the panel. Fix 77a1d15 moves the fan PWM to a dedicated
+LEDC_TIMER_1/LEDC_CHANNEL_1 (GPIO1 stays the fan PWM pin).
+
+Verification: after reflashing, the cluster status service on gb10 was
+stopped for ~21 s to force the full-speed fault fallback while capturing
+serial. The fault path fired as designed and the panel stayed lit through
+the whole full-speed window; service restart recovered auto mode.
+
+  W (87312) cluster_display: status fetch failed: ESP_ERR_HTTP_CONNECT
+  W (87322) fan_control: fault temp-invalid, fans forced to full speed
+  E (89322) esp-tls: [sock=54] delayed connect error: Connection reset by peer
+  W (95382) cluster_display: status fetch failed: ESP_ERR_HTTP_CONNECT
+  W (95382) fan_control: fault endpoint-timeout, fans forced to full speed
+  E (97392) esp-tls: [sock=54] delayed connect error: Connection reset by peer
+  W (101432) cluster_display: status fetch failed: ESP_ERR_HTTP_CONNECT
+  I (104352) fan_control: fault cleared, resume auto
+  I (104352) cluster_display: cluster status updated
+
+Full window 87.3 s-104.4 s (17 s at forced full speed, previously enough to
+blank the panel); 12 status refresh cycles completed normally in the same
+capture. No aborts or resets; the unit had already run a clean reboot with
+the fix before this test.
