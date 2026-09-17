@@ -26,105 +26,98 @@
       cursor: pointer;
       touch-action: manipulation;
       user-select: none;
-      letter-spacing: 0;
     }
-    .page {
+    .page { position: absolute; inset: 0; background: #091a24; }
+    .page.hidden { visibility: hidden; }
+    .band {
       position: absolute;
-      inset: 0;
-      background: #091a24;
-      opacity: 1;
-      visibility: visible;
-      transition: opacity 160ms ease;
+      left: 0; top: 0; right: 0;
+      height: 22px;
+      background: #172b3a;
+      border-bottom: 1px solid #315568;
     }
-    .page.hidden { opacity: 0; visibility: hidden; }
     .title {
       position: absolute;
-      left: 8px;
-      top: 3px;
+      left: 8px; top: 3px;
       color: #7de2d1;
-      font-size: 20px;
+      font-size: 13px;
       font-weight: 700;
-      line-height: 24px;
+      line-height: 16px;
     }
-    .page-index {
+    .clock {
       position: absolute;
-      right: 8px;
-      top: 3px;
+      right: 8px; top: 5px;
       color: #8ba8b7;
-      font-size: 20px;
-      line-height: 24px;
+      font-size: 12px;
+      line-height: 12px;
     }
     .panel {
       position: absolute;
-      top: 31px;
-      height: 116px;
-      padding: 7px;
+      top: 28px;
+      height: 140px;
+      padding: 6px 8px;
       overflow: hidden;
       border: 1px solid #315568;
       border-radius: 4px;
       background: #172b3a;
+      font-size: 12px;
+      line-height: 15px;
       white-space: pre;
     }
-    .host {
-      width: 153px;
-      font-size: 14px;
-      font-weight: 600;
-      line-height: 19px;
-    }
-    #head { left: 5px; }
-    #worker { left: 162px; }
-    #model-panel { left: 5px; width: 310px; white-space: normal; }
-    #model-state {
-      font-size: 24px;
+    .host { width: 148px; }
+    #head { left: 8px; }
+    #worker { left: 164px; }
+    #model-panel { left: 8px; width: 304px; }
+    .host .name { color: #7de2d1; font-weight: 600; }
+    .host .thr {
+      display: none;
+      margin-left: 6px;
+      padding: 0 4px;
+      border-radius: 3px;
+      background: #ffc66d;
+      color: #061018;
       font-weight: 700;
-      line-height: 29px;
     }
-    #model-state.online { color: #7de2d1; }
-    #model-state.offline { color: #ff6b6b; }
-    #model-metrics {
-      margin-top: 0;
-      font-size: 20px;
-      font-weight: 600;
-      line-height: 24px;
-      white-space: pre;
-    }
-    .footer {
+    .host.thr .thr { display: inline; }
+    .hero { font-size: 24px; font-weight: 700; line-height: 26px; color: #e6f1f5; }
+    .hero-side { position: absolute; left: 74px; top: 46px; font-size: 16px; line-height: 18px; }
+    .barrow { position: relative; height: 15px; }
+    .barrow:first-of-type { margin-top: 4px; }
+    .barlabel { position: absolute; left: 0; top: 1px; color: #8ba8b7; }
+    .bartrack {
       position: absolute;
-      right: 8px;
-      bottom: 4px;
-      width: 304px;
+      left: 40px; top: 3px;
+      width: 76px; height: 8px;
+      border-radius: 4px;
+      background: #254552;
       overflow: hidden;
-      color: #8ba8b7;
-      font-size: 14px;
-      line-height: 17px;
-      text-align: right;
-      white-space: nowrap;
     }
-    .footer.error { color: #ffb86b; }
+    .barfill { height: 100%; border-radius: 4px; background: #7de2d1; }
+    .barvalue { position: absolute; right: 8px; top: 1px; font-weight: 600; }
+    .meta { color: #8ba8b7; line-height: 12px; }
+    .online { color: #8ee3a2; font-weight: 600; }
+    .offline { color: #ff6b6b; font-weight: 600; }
+    .modelname { position: absolute; right: 8px; top: 7px; color: #7de2d1; font-weight: 600; }
+    #model-panel .barlabel { width: 80px; }
+    #model-panel .bartrack { left: 88px; width: 168px; }
+    .health { position: absolute; left: 150px; top: 34px; color: #e6f1f5; }
   </style>
 </head>
 <body>
   <main id="stage" aria-label="Live mirror of the GB10 cluster LCD">
     <section id="screen" aria-live="polite">
       <div class="page" id="system-page">
+        <div class="band"></div>
         <div class="title">SYSTEM LOAD</div>
-        <div class="page-index">1/2</div>
-        <div class="panel host" id="head">HEAD
-Waiting...</div>
-        <div class="panel host" id="worker">WORKER
-Waiting...</div>
-        <div class="footer">Web: connecting</div>
+        <div class="clock">--:--:--</div>
+        <div class="panel host" id="head"></div>
+        <div class="panel host" id="worker"></div>
       </div>
       <div class="page hidden" id="model-page">
+        <div class="band"></div>
         <div class="title">MODEL INFERENCE</div>
-        <div class="page-index">2/2</div>
-        <div class="panel" id="model-panel">
-          <div class="offline" id="model-state">MODEL DOWN</div>
-          <div id="model-metrics">RUN 0  WAIT 0
-KV 0%
-IN 0  OUT 0 tok/s</div>
-        </div>
-        <div class="footer">Web: connecting</div>
+        <div class="clock">--:--:--</div>
+        <div class="panel" id="model-panel"></div>
       </div>
     </section>
   </main>
@@ -132,12 +125,9 @@ IN 0  OUT 0 tok/s</div>
     const stage = document.getElementById('stage');
     const screen = document.getElementById('screen');
     const pages = [document.getElementById('system-page'), document.getElementById('model-page')];
-    const head = document.getElementById('head');
-    const worker = document.getElementById('worker');
-    const modelState = document.getElementById('model-state');
-    const modelMetrics = document.getElementById('model-metrics');
-    const footers = document.querySelectorAll('.footer');
-    const DEFAULT_PAGE_ROTATION_MS = 10000;
+    const hostEls = [document.getElementById('head'), document.getElementById('worker')];
+    const clocks = document.querySelectorAll('.clock');
+    const DEFAULT_PAGE_ROTATION_MS = 5000;
     const MIN_PAGE_ROTATION_MS = 1000;
     const MAX_PAGE_ROTATION_MS = 300000;
     let currentPage = 0;
@@ -151,8 +141,48 @@ IN 0  OUT 0 tok/s</div>
       screen.style.transform = `scale(${scale})`;
     }
 
-    function number(value, digits = 0) {
-      return Number.isFinite(value) ? value.toFixed(digits) : '-';
+    function bar(label, pct, digits = 0) {
+      const known = Number.isFinite(pct);
+      const value = known ? pct.toFixed(digits) + '%' : '--';
+      const color = pct >= 97 ? '#ff6b6b' : pct >= 90 ? '#ffc66d' : '#7de2d1';
+      return `<div class="barrow"><span class="barlabel">${label}</span>` +
+        `<span class="bartrack"><span class="barfill" style="width:${known ? Math.min(pct, 100) : 0}%;background:${color}"></span></span>` +
+        `<span class="barvalue" style="color:${color}">${value}</span></div>`;
+    }
+
+    function hostHtml(name, value) {
+      if (!value) return `<span class="name">${name}</span>\n--`;
+      const thr = value.throttle_thermal === true || value.throttle_power_cap === true;
+      const temp = Number.isFinite(value.temp_c) ? `${Math.round(value.temp_c)}C` : '--';
+      const soc = Number.isFinite(value.cpu_temp_c) ? `${Math.round(value.cpu_temp_c)}C` : '--';
+      const nvme = Number.isFinite(value.nvme_temp_c) ? `${Math.round(value.nvme_temp_c)}C` : '--';
+      const cpu = Number.isFinite(value.cpu_usage_pct) ? `${Math.round(value.cpu_usage_pct)}%` : '--';
+      const power = Number.isFinite(value.power_w) ? `${value.power_w.toFixed(1)}W` : '--';
+      const est = Number.isFinite(value.power_sys_est_w) ? `est ${value.power_sys_est_w.toFixed(1)}W` : 'est --';
+      const up = Number.isFinite(value.uptime_s) ? formatUptime(value.uptime_s) : '--';
+      return `<span class="name">${name}</span><span class="thr">THR</span>\n` +
+        `<span class="hero">${Number.isFinite(value.gpu_util_pct) ? Math.round(value.gpu_util_pct) : '--'}%</span>` +
+        `<span class="hero-side">GPU ${temp}</span>\n` +
+        bar('GPU', value.gpu_util_pct) + bar('RAM', value.mem_used_pct) + bar('DSK', value.root_used_pct) +
+        `<div class="meta">${power} · ${est}\nSoC ${soc} · NVMe ${nvme}\nCPU ${cpu} · up ${up}</div>`;
+    }
+
+    function modelHtml(value) {
+      const online = value.healthy === true;
+      const state = online ? '<span class="online">MODEL ONLINE</span>' : '<span class="offline">MODEL DOWN</span>';
+      if (!online) return `${state}\n--`;
+      const name = typeof value.name === 'string' ? value.name : '';
+      const ttft = Number.isFinite(value.ttft_ms) && Number.isFinite(value.ttft_p95_ms)
+        ? `TTFT ${(value.ttft_ms / 1000).toFixed(1)}s · p95 ${(value.ttft_p95_ms / 1000).toFixed(1)}s`
+        : 'TTFT --';
+      const itl = Number.isFinite(value.itl_p95_ms) ? `ITL p95 ${Math.round(value.itl_p95_ms)}ms` : 'ITL p95 --';
+      return `${state}<span class="modelname">${name}</span>\n` +
+        `<span class="hero">${Number(value.generation_tps || 0).toFixed(1)}</span>` +
+        `<span style="color:#8ba8b7"> tok/s out</span>\n` +
+        `<span style="color:#8ba8b7">in ${Number(value.prompt_tps || 0).toFixed(1)} tok/s</span>` +
+        `<div class="health">run ${Math.round(value.running || 0)} · wait ${Math.round(value.waiting || 0)}\n${ttft}\n${itl}</div>\n` +
+        bar('KV cache', value.kv_pct, 1) + bar('Prefix hit', value.prefix_cache_hit_pct) +
+        bar('Spec accept', value.spec_accept_pct);
     }
 
     function formatUptime(seconds) {
@@ -163,16 +193,6 @@ IN 0  OUT 0 tok/s</div>
       if (days >= 2) return `${days}d`;
       if (hours >= 1) return `${hours + days * 24}h`;
       return `${minutes}m`;
-    }
-
-    function hostText(name, value) {
-      if (!value) return `${name}\nUNAVAILABLE`;
-      const nvme = Number.isFinite(value.nvme_temp_c) ? `${Math.round(value.nvme_temp_c)}C` : '-';
-      const uptime = Number.isFinite(value.uptime_s) ? formatUptime(value.uptime_s) : '-';
-      return `${name} ${number(value.temp_c)}C GPU SOC\n` +
-        `PWR ${number(value.power_w, 1)}W  NVME ${nvme}\n` +
-        `GPU ${number(value.gpu_util_pct)}%  LOAD ${number(value.load1, 1)}\n` +
-        `RAM ${number(value.mem_used_pct)}%  UPTM ${uptime}`;
     }
 
     function showPage(index) {
@@ -190,13 +210,6 @@ IN 0  OUT 0 tok/s</div>
       scheduleNextPage();
     }
 
-    function setFooter(value, error = false) {
-      footers.forEach(footer => {
-        footer.className = `footer${error ? ' error' : ''}`;
-        footer.textContent = value;
-      });
-    }
-
     function render(data) {
       const configuredRotation = Number(data.page_rotation_ms);
       const nextRotation = Number.isFinite(configuredRotation) &&
@@ -206,16 +219,14 @@ IN 0  OUT 0 tok/s</div>
         pageRotationMs = nextRotation;
         scheduleNextPage();
       }
-      head.textContent = hostText('HEAD', data.head);
-      worker.textContent = hostText('WORKER', data.worker);
-      const value = data.model || {};
-      const online = value.healthy === true;
-      modelState.className = online ? 'online' : 'offline';
-      modelState.textContent = online ? 'MODEL ONLINE' : 'MODEL DOWN';
-      modelMetrics.textContent = `RUN ${number(value.running)}  WAIT ${number(value.waiting)}\n` +
-        `KV ${number(value.kv_pct)}%\n` +
-        `IN ${number(value.prompt_tps)}  OUT ${number(value.generation_tps)} tok/s`;
-      setFooter(`WEB LIVE  Updated ${data.updated || '--:--:--'}`);
+      clocks.forEach(c => { c.textContent = data.updated || '--:--:--'; });
+      hostEls[0].className = 'panel host' +
+        (data.head && (data.head.throttle_thermal || data.head.throttle_power_cap) ? ' thr' : '');
+      hostEls[1].className = 'panel host' +
+        (data.worker && (data.worker.throttle_thermal || data.worker.throttle_power_cap) ? ' thr' : '');
+      hostEls[0].innerHTML = hostHtml('HEAD', data.head);
+      hostEls[1].innerHTML = hostHtml('WORKER', data.worker);
+      document.getElementById('model-panel').innerHTML = modelHtml(data.model || {});
     }
 
     async function refresh() {
@@ -223,8 +234,8 @@ IN 0  OUT 0 tok/s</div>
         const response = await fetch('/status', {cache: 'no-store'});
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         render(await response.json());
-      } catch (error) {
-        setFooter('Status endpoint unreachable', true);
+      } catch {
+        clocks.forEach(c => { c.textContent = '--:--:--'; });
       }
     }
 

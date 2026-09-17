@@ -31,29 +31,38 @@ not mutate model containers or deployment configuration.
 
 ## Display pages
 
-The 320 x 172 UI uses 20 px metric text and a 24 px model-state label. It has
-three pages plus a fan settings screen:
+The 320 x 172 UI merges the title and status line into one top band: page
+title left, status timestamp right. It has three carousel pages plus fan
+settings screens:
 
-- `SYSTEM LOAD` shows GPU/SoC temperature and power, NVMe temperature, GPU
-  utilization, system load, RAM use, and uptime for both hosts.
-- `MODEL INFERENCE` shows service health, running and waiting requests, KV
-  cache use, and prompt/generation token rates.
-- `FAN STATUS` shows the shared fan stage, PWM level, control temperature,
-  per-fan RPM against the configured full-speed reference, per-fan tach
-  health, and a fault banner while the controller forces full speed.
-- `FAN SETTINGS` edits the shared-curve stage boundaries and per-fan
-  full-speed references; changes persist in NVS.
+- `SYSTEM LOAD`: per host, a hero GPU-utilisation readout with GPU
+  temperature, GPU/RAM/disk bars (amber at 90 percent, red at 97), board
+  power with the estimated whole-node draw, SoC and NVMe temperatures, CPU
+  load, uptime, and an amber `THR` badge while the GPU reports thermal or
+  power-cap throttling.
+- `MODEL INFERENCE`: service state, model name, output tok/s hero, queue
+  depth, TTFT with p95, inter-token p95, and KV-cache / prefix-hit /
+  speculative-accept bars.
+- `FAN STATUS`: mode and stage chips, tach health, a PWM bar, per-fan RPM
+  against the configured full-speed reference, and the red fault banner while
+  the controller forces full speed.
+- `FAN SETTINGS` (outside the carousel): curve bounds, calibration
+  references, and mode selection with live per-fan RPM rows. Reached from the
+  centred gear on `FAN STATUS`; `BACK` returns and rotation resumes. Curve
+  and reference rows open edit screens with save/cancel; changes persist in
+  NVS.
 
-Bottom navigation switches between the three main pages. Auto rotation still
-only cycles the two monitoring pages and never enters the fan page. The fan
-settings screen is reachable from the gear button on `FAN STATUS` and is not
-part of the browser mirror, which keeps reproducing the two monitoring pages.
+There is no bottom navigation. The three status pages rotate automatically
+and any tap advances to the next page. The browser mirror reproduces the
+SYSTEM and MODEL pages in the same style; fan telemetry lives on the device
+and is not part of `/status`, so the mirror does not render a fan page.
 
 The status service supplies the page interval to both clients through the
-`page_rotation_ms` field. A tap anywhere on a monitoring page advances
-immediately and resets the timer. The firmware falls back to ten seconds when
-the field is absent or outside the supported 1-300 second range. The firmware
-polls `/status` every two seconds; the mirror refreshes on the same cadence.
+`page_rotation_ms` field. A tap anywhere on a carousel page advances
+immediately and resets the timer. The firmware falls back to five seconds
+when the field is absent or outside the supported 1-300 second range. The
+firmware polls `/status` every two seconds; the mirror refreshes on the same
+cadence.
 
 Wi-Fi credentials live only in the ignored file
 `firmware/touch-demo/main/wifi_credentials.h`. The tracked

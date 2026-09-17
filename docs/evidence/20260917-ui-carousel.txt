@@ -1,0 +1,51 @@
+UI carousel + agent-metrics screens: build, flash, serial evidence
+==================================================================
+Date: 2026-09-17
+Branch: codex/fan-debug-followup-20260915
+Commits: 963f93d (agent full telemetry) -> b85184a (UI carousel rebuild)
+
+Design source: user-approved 1:1 mockups (320x172), see
+output/review/kimi-final-1x-0{1..8}-*.png and tmp/mockup_final_1x_v3.py.
+Design produced by the configured relay LLM (k3-256k) from a written brief,
+reviewed by the same model, fixes applied, then user-confirmed.
+
+Build (gb10-2, ESP-IDF 5.5.2)
+-----------------------------
+$ ./scripts/build.sh
+esp32_s3_touch_demo.bin binary size 0x12db50 bytes.
+Smallest app partition is 0x600000 bytes (80% free).
+Project build complete.
+First build attempt caught 3 -Werror issues (unescaped % in a format
+literal, ternary format-string/argument mismatch, format-truncation);
+fixed before flashing.
+
+Flash (gb10-2)
+--------------
+$ ./scripts/flash.sh
+Hash of data verified.
+Hard resetting via RTS pin...
+
+Serial (12 s window after boot, unfiltered)
+-------------------------------------------
+$ stty -F $PORT 115200 raw -echo; timeout 12 cat $PORT > /tmp/ui-boot.log
+grep -c "cluster status updated" -> 3
+(no E/W lines, no Guru Meditation, no aborts, no reboots)
+Update cadence ~3.6 s: the agent's fresh collect takes ~1.7 s
+(worker SSH snapshot sleeps 1 s) on top of its 2 s cache; the firmware
+poll stays at 2 s and tolerates the slower effective cadence.
+
+Agent (deployed earlier the same day, commit 963f93d)
+-----------------------------------------------------
+$ curl -s http://127.0.0.1:9108/status | wc -c -> 1194 (fits the 4 KB
+firmware buffer with headroom; old 2 KB firmware also stayed compatible
+during rollout)
+$ curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:9108/ -> 200
+Mirror updated to the new band/bar layout and redeployed without a
+service restart (file read per request).
+
+Known on-device follow-ups (need the user's eyes on hardware)
+-------------------------------------------------------------
+- Visual check of all three carousel pages and the settings/edit screens.
+- Touch walk-through: tap advance, gear -> settings -> BACK resumes
+  rotation, edit save/cancel, THR badge appearance under real throttling.
+- STOP-stage stop behaviour retest is still pending from the fan fix.
