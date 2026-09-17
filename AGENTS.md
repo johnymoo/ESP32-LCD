@@ -87,7 +87,9 @@ same cadence. The service is deployed on `gb10` as the user unit
 
 The status service is read-only. Do not restart, stop, or reconfigure Qwen,
 DeepSeek, trading, lexdata, or unrelated GB10 workloads while changing the
-display. GPU memory fields are unavailable on GB10 and must not be invented.
+display. On GB10 `nvidia-smi` reports `memory.used`/`memory.total` as `N/A`;
+the only verified GPU memory source is the `--query-compute-apps` sum
+(`gpu_mem_mb` in the status payload). Never invent other GPU memory fields.
 
 ## Secrets and generated files
 

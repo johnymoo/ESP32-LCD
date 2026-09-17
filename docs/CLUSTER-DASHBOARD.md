@@ -10,17 +10,24 @@ The firmware connects to Wi-Fi and reads:
 http://192.168.88.181:9108/status
 ```
 
-The read-only service runs as a user service on `gb10`. It reports:
+The read-only service runs as a user service on `gb10`. For each host (local
+head node and SSH-reachable worker) it reports:
 
-- head and worker GPU temperature, utilization, power (GPU/SoC `power.draw`),
-  system load, RAM use, NVMe composite temperature, and uptime;
-- DeepSeek running and waiting request counts;
-- vLLM KV cache usage;
-- recent prompt and generation token rates.
+- GPU temperature, utilization, board power (`power.draw`), current and max SM
+  clocks, thermal-throttle and power-cap throttle flags, and GPU-allocated
+  memory (the `--query-compute-apps` sum, `gpu_mem_mb`);
+- SoC/ACPI thermal-zone peak (`cpu_temp_c`), CPU utilization, estimated
+  whole-node draw (`power_sys_est_w`, modeled after the sparkDash fleet-energy
+  formula and labeled as an estimate);
+- RAM use plus total/available pool size, NVMe composite temperature, root
+  filesystem use, disk and network throughput (kB/s), load, and uptime;
+- DeepSeek running/waiting requests, KV cache use, prompt and generation token
+  rates, TTFT mean (recent window, cumulative fallback) and p95, inter-token
+  latency p95, preemption counter, prefix-cache hit rate, and speculative
+  decoding acceptance rate.
 
-GB10 reports GPU memory fields as `N/A`, so the dashboard intentionally does
-not display GPU memory usage. The service does not mutate model containers or
-deployment configuration.
+Fields a source cannot provide are `null`, never zero-faked. The service does
+not mutate model containers or deployment configuration.
 
 ## Display pages
 
@@ -68,10 +75,10 @@ external assets or build dependencies.
 ## Configure page rotation
 
 Set `--page-rotation-seconds` on the status service. Valid values are integers
-from 1 through 300; the tracked service unit defaults to 10:
+from 1 through 300; the tracked service unit defaults to 5:
 
 ```text
-ExecStart=/usr/bin/python3 /home/chriswang/cluster-display-status/cluster_status_server.py --host 0.0.0.0 --port 9108 --page-rotation-seconds 10
+ExecStart=/usr/bin/python3 /home/chriswang/cluster-display-status/cluster_status_server.py --host 0.0.0.0 --port 9108 --page-rotation-seconds 5
 ```
 
 After changing the installed unit, reload and restart only this user service:
