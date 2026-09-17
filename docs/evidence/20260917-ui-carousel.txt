@@ -49,3 +49,20 @@ Known on-device follow-ups (need the user's eyes on hardware)
 - Touch walk-through: tap advance, gear -> settings -> BACK resumes
   rotation, edit save/cancel, THR badge appearance under real throttling.
 - STOP-stage stop behaviour retest is still pending from the fan fix.
+
+Addendum (same day, after the first rollout)
+--------------------------------------------
+- User video showed boxes on every composed line: the middle dot U+00B7 is
+  outside the built-in Montserrat charset. Replaced with the shipped bullet
+  glyph (078a158); carousel slowed to ten seconds across agent, unit file,
+  mirror, and firmware default.
+- User video confirmed the SYSTEM six-bar layout clipped the CPU row and hid
+  the footer; hero dropped to the 20 px font with a 13 px bar pitch and the
+  panel extended two pixels (3ab09d7). GPU temperature side label shortened
+  to a bare degree sign.
+- MODEL page redesigned into THROUGHPUT / LATENCY / EFFICIENCY zones per the
+  approved model-v2-1x mockup; queue/preempt chips colour under pressure and
+  KV cache renders as an amber pressure bar (d1c8695).
+- STOP retest completed on hardware: fans coast to ~300 RPM on a solid-low
+  line and plateau; user accepted STOP = minimum-speed semantics, no
+  supply-cut MOS (documented in FAN-CONTROL-20260916.md).

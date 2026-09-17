@@ -36,21 +36,33 @@ title left, status timestamp right. It has three carousel pages plus fan
 settings screens:
 
 - `SYSTEM LOAD`: per host, a hero GPU-utilisation readout with GPU
-  temperature, GPU/RAM/disk bars (amber at 90 percent, red at 97), board
-  power with the estimated whole-node draw, SoC and NVMe temperatures, CPU
-  load, uptime, and an amber `THR` badge while the GPU reports thermal or
+  temperature beside it and six metric bars — GPU utilisation (cyan),
+  RAM and root-disk use (amber at 90 percent, red at 97), SoC and NVMe
+  temperature on a 0-100 degree scale (amber at 80, red at 95), and CPU load
+  — plus a footer line with board power, the estimated whole-node draw, and
+  uptime. An amber `THR` badge appears while the GPU reports thermal or
   power-cap throttling.
-- `MODEL INFERENCE`: service state, model name, output tok/s hero, queue
-  depth, TTFT with p95, inter-token p95, and KV-cache / prefix-hit /
-  speculative-accept bars.
+- `MODEL INFERENCE`: three labelled zones — THROUGHPUT (generation tok/s
+  hero, prompt rate), LATENCY (TTFT mean, TTFT p95, inter-token p95), and
+  EFFICIENCY (prefix-hit and speculative-accept chips, plus a separate amber
+  KV-cache pressure bar). A status dot and model name sit in the header;
+  running/waiting/preemptions render as chips that colour under pressure.
 - `FAN STATUS`: mode and stage chips, tach health, a PWM bar, per-fan RPM
   against the configured full-speed reference, and the red fault banner while
   the controller forces full speed.
 - `FAN SETTINGS` (outside the carousel): curve bounds, calibration
   references, and mode selection with live per-fan RPM rows. Reached from the
   centred gear on `FAN STATUS`; `BACK` returns and rotation resumes. Curve
-  and reference rows open edit screens with save/cancel; changes persist in
-  NVS.
+  and reference rows open edit screens (top-right `BACK`, long-press repeat
+  on the +/- buttons) with save/cancel; changes persist in NVS.
+
+Approved 1:1 design mockups live in `output/review/` and match the shipped
+firmware:
+
+![SYSTEM LOAD](../output/review/system-final-1x.png)
+![MODEL INFERENCE](../output/review/model-v2-1x.png)
+![FAN STATUS](../output/review/kimi-final-1x-03-fan-status.png)
+![FAN SETTINGS](../output/review/kimi-final-1x-06-settings-mode.png)
 
 There is no bottom navigation. The three status pages rotate automatically
 and any tap advances to the next page. The browser mirror reproduces the
