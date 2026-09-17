@@ -59,7 +59,7 @@ and is not part of `/status`, so the mirror does not render a fan page.
 
 The status service supplies the page interval to both clients through the
 `page_rotation_ms` field. A tap anywhere on a carousel page advances
-immediately and resets the timer. The firmware falls back to five seconds
+immediately and resets the timer. The firmware falls back to ten seconds
 when the field is absent or outside the supported 1-300 second range. The
 firmware polls `/status` every two seconds; the mirror refreshes on the same
 cadence.
@@ -84,10 +84,10 @@ external assets or build dependencies.
 ## Configure page rotation
 
 Set `--page-rotation-seconds` on the status service. Valid values are integers
-from 1 through 300; the tracked service unit defaults to 5:
+from 1 through 300; the tracked service unit defaults to 10:
 
 ```text
-ExecStart=/usr/bin/python3 /home/chriswang/cluster-display-status/cluster_status_server.py --host 0.0.0.0 --port 9108 --page-rotation-seconds 5
+ExecStart=/usr/bin/python3 /home/chriswang/cluster-display-status/cluster_status_server.py --host 0.0.0.0 --port 9108 --page-rotation-seconds 10
 ```
 
 After changing the installed unit, reload and restart only this user service:

@@ -27,7 +27,7 @@ WORKER = "admin@192.168.88.198"
 METRICS_URL = "http://127.0.0.1:8890/metrics"
 MODEL_NAME = "deepseek-v4-flash-0731"
 DASHBOARD_PATH = Path(__file__).with_name("dashboard.html")
-PAGE_ROTATION_MS = 5000
+PAGE_ROTATION_MS = 10000
 CACHE_SECONDS = 2.0
 SECTOR_BYTES = 512
 # Estimated whole-node draw: GPU board draw + a linear 5.2-65 W CPU model +
@@ -649,9 +649,9 @@ def main():
     parser.add_argument(
         "--page-rotation-seconds",
         type=rotation_seconds,
-        default=5,
+        default=10,
         metavar="SECONDS",
-        help="dashboard page rotation interval from 1 to 300 seconds (default: 5)",
+        help="dashboard page rotation interval from 1 to 300 seconds (default: 10)",
     )
     args = parser.parse_args()
     PAGE_ROTATION_MS = args.page_rotation_seconds * 1000

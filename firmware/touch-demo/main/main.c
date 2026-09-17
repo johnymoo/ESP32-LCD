@@ -31,7 +31,7 @@
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT BIT1
 #define WIFI_MAX_RETRY 10
-#define DEFAULT_PAGE_ROTATION_MS 5000
+#define DEFAULT_PAGE_ROTATION_MS 10000
 #define MIN_PAGE_ROTATION_MS 1000
 #define MAX_PAGE_ROTATION_MS 300000
 #define UI_REFRESH_MS 500
@@ -56,7 +56,9 @@
 
 #define DEGREE_C "\xC2\xB0" "C"
 #define BULLET "\xE2\x80\xA2"
-#define MIDDOT "\xC2\xB7"
+/* U+00B7 is not in the built-in Montserrat charset (it renders as a box);
+ * reuse the bullet glyph, which LVGL ships and the UI has used before. */
+#define MIDDOT "\xE2\x80\xA2"
 
 typedef enum {
     PAGE_SYSTEM = 0,
