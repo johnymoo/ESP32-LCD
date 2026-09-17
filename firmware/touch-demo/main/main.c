@@ -92,9 +92,9 @@ static lv_obj_t *clock_labels[PAGE_COUNT];
 static lv_obj_t *host_hero[2];
 static lv_obj_t *host_temp_label[2];
 static lv_obj_t *host_thr[2];
-static lv_obj_t *host_bar[2][3];
-static lv_obj_t *host_bar_value[2][3];
-static lv_obj_t *host_meta[2][3];
+static lv_obj_t *host_bar[2][6];
+static lv_obj_t *host_bar_value[2][6];
+static lv_obj_t *host_foot[2];
 static lv_obj_t *model_state_label;
 static lv_obj_t *model_name_label;
 static lv_obj_t *model_hero_label;
@@ -426,7 +426,8 @@ static void open_edit(edit_mode_t mode, uint8_t index)
 
 static void edit_button_event(lv_event_t *event)
 {
-    if (lv_event_get_code(event) != LV_EVENT_CLICKED) {
+    const lv_event_code_t code = lv_event_get_code(event);
+    if (code != LV_EVENT_CLICKED && code != LV_EVENT_LONG_PRESSED_REPEAT) {
         return;
     }
     const intptr_t delta = (intptr_t)lv_event_get_user_data(event);
@@ -550,7 +551,7 @@ static lv_obj_t *create_host_bar(lv_obj_t *parent, int x, int y, int width)
 static void create_system_page(lv_obj_t *screen)
 {
     static const char *names[2] = {"HEAD", "WORKER"};
-    static const char *k_bar_name[3] = {"GPU", "RAM", "DSK"};
+    static const char *k_bar_name[6] = {"GPU", "RAM", "DSK", "SOC", "NVM", "CPU"};
 
     lv_obj_t *page = create_page(screen);
     pages[PAGE_SYSTEM] = page;
@@ -574,19 +575,16 @@ static void create_system_page(lv_obj_t *screen)
                                     "--", LV_TEXT_ALIGN_AUTO);
         host_temp_label[i] = create_label(panel, 74, 26, 70, &lv_font_montserrat_16,
                                           COLOR_BRIGHT, "GPU --", LV_TEXT_ALIGN_AUTO);
-        for (unsigned j = 0; j < 3; j++) {
+        for (unsigned j = 0; j < 6; j++) {
             const int y = 56 + (int)j * 15;
             create_label(panel, 8, y, 0, &lv_font_montserrat_12, COLOR_MUTED, k_bar_name[j],
                          LV_TEXT_ALIGN_AUTO);
-            host_bar[i][j] = create_host_bar(panel, 40, y + 2, 76);
-            host_bar_value[i][j] = create_label(panel, 120, y, 20, &lv_font_montserrat_12,
+            host_bar[i][j] = create_host_bar(panel, 40, y + 2, 72);
+            host_bar_value[i][j] = create_label(panel, 114, y, 26, &lv_font_montserrat_12,
                                                 COLOR_CYAN, "--", LV_TEXT_ALIGN_RIGHT);
         }
-        for (unsigned j = 0; j < 3; j++) {
-            host_meta[i][j] = create_label(panel, 8, 103 + (int)j * 12, 136,
-                                           &lv_font_montserrat_12, COLOR_MUTED, "--",
-                                           LV_TEXT_ALIGN_AUTO);
-        }
+        host_foot[i] = create_label(panel, 8, 148, 136, &lv_font_montserrat_12, COLOR_MUTED,
+                                    "--", LV_TEXT_ALIGN_AUTO);
     }
 }
 
@@ -772,7 +770,7 @@ static void create_settings_page(lv_obj_t *screen)
                             (void *)(intptr_t)i);
     }
 
-    lv_obj_t *back = create_button(page, 176, 1, 48, 20, "BACK", &lv_font_montserrat_12);
+    lv_obj_t *back = create_button(page, 164, 1, 60, 20, "BACK", &lv_font_montserrat_12);
     lv_obj_add_event_cb(back, nav_click_event, LV_EVENT_CLICKED, (void *)(intptr_t)PAGE_FAN);
 
     settings_toast = create_label(page, 0, 78, 320, &lv_font_montserrat_12, COLOR_AMBER,
@@ -786,8 +784,12 @@ static void create_edit_page(lv_obj_t *screen)
     pages[PAGE_EDIT] = page;
     create_title_band(page);
     create_clock(page, PAGE_EDIT);
-    edit_title_label = create_label(page, 8, 3, 240, &lv_font_montserrat_16, COLOR_CYAN, "",
+    edit_title_label = create_label(page, 8, 3, 150, &lv_font_montserrat_16, COLOR_CYAN, "",
                                     LV_TEXT_ALIGN_AUTO);
+    /* Same placement as the settings BACK: leaving an edit screen never
+     * requires reaching the small CANCEL at the panel bottom. */
+    lv_obj_t *back = create_button(page, 164, 1, 60, 20, "BACK", &lv_font_montserrat_12);
+    lv_obj_add_event_cb(back, edit_cancel_event, LV_EVENT_CLICKED, NULL);
 
     lv_obj_t *panel = create_panel(page, 8, 28, 304, 140, COLOR_PANEL, COLOR_BORDER);
     edit_left_label = create_label(panel, 0, 10, 304, &lv_font_montserrat_12, COLOR_MUTED,
@@ -799,8 +801,12 @@ static void create_edit_page(lv_obj_t *screen)
     edit_minus_button = create_button(panel, 8, 68, 142, 30, "-", &lv_font_montserrat_12);
     lv_obj_add_event_cb(edit_minus_button, edit_button_event, LV_EVENT_CLICKED,
                         (void *)(intptr_t)-1);
+    lv_obj_add_event_cb(edit_minus_button, edit_button_event, LV_EVENT_LONG_PRESSED_REPEAT,
+                        (void *)(intptr_t)-1);
     edit_plus_button = create_button(panel, 154, 68, 142, 30, "+", &lv_font_montserrat_12);
     lv_obj_add_event_cb(edit_plus_button, edit_button_event, LV_EVENT_CLICKED,
+                        (void *)(intptr_t)1);
+    lv_obj_add_event_cb(edit_plus_button, edit_button_event, LV_EVENT_LONG_PRESSED_REPEAT,
                         (void *)(intptr_t)1);
     lv_obj_t *cancel = create_button(panel, 154, 104, 142, 26, "CANCEL",
                                      &lv_font_montserrat_12);
@@ -895,6 +901,12 @@ static uint32_t pct_color(double pct)
     return pct >= 97 ? COLOR_RED : pct >= 90 ? COLOR_AMBER : COLOR_CYAN;
 }
 
+/* Temperature bars map 0-100 degrees C straight onto the bar. */
+static uint32_t temp_color(double temp)
+{
+    return temp >= 95 ? COLOR_RED : temp >= 80 ? COLOR_AMBER : COLOR_CYAN;
+}
+
 static void format_pct(char *out, size_t size, double pct, int digits)
 {
     if (pct < 0) {
@@ -916,11 +928,11 @@ static void update_host_panel(unsigned index, cJSON *host)
     if (!valid) {
         lv_label_set_text(host_hero[index], "--");
         lv_label_set_text(host_temp_label[index], "GPU --");
-        for (unsigned j = 0; j < 3; j++) {
+        for (unsigned j = 0; j < 6; j++) {
             lv_bar_set_value(host_bar[index][j], 0, LV_ANIM_OFF);
             lv_label_set_text(host_bar_value[index][j], "--");
-            lv_label_set_text(host_meta[index][j], "--");
         }
+        lv_label_set_text(host_foot[index], "--");
         lv_obj_add_flag(host_thr[index], LV_OBJ_FLAG_HIDDEN);
         return;
     }
@@ -949,39 +961,44 @@ static void update_host_panel(unsigned index, cJSON *host)
         lv_label_set_text(host_temp_label[index], "GPU --");
     }
 
-    /* GPU utilisation is activity, not a capacity warning: always cyan. */
+    /* GPU utilisation and CPU load are activity, not capacity warnings:
+     * always cyan. Temperatures bar 0-100 degrees C with heat thresholds. */
     format_pct(value, sizeof(value), util, 0);
     set_bar_value(host_bar[index][0], host_bar_value[index][0], util, COLOR_CYAN, value);
     format_pct(value, sizeof(value), ram, 0);
     set_bar_value(host_bar[index][1], host_bar_value[index][1], ram, pct_color(ram), value);
     format_pct(value, sizeof(value), disk, 0);
     set_bar_value(host_bar[index][2], host_bar_value[index][2], disk, pct_color(disk), value);
+    if (soc >= 0) {
+        snprintf(value, sizeof(value), "%.0f" DEGREE_C, soc);
+        set_bar_value(host_bar[index][3], host_bar_value[index][3], soc, temp_color(soc),
+                      value);
+    } else {
+        set_bar_value(host_bar[index][3], host_bar_value[index][3], -1, COLOR_CYAN, "--");
+    }
+    if (nvme >= 0) {
+        snprintf(value, sizeof(value), "%.0f" DEGREE_C, nvme);
+        set_bar_value(host_bar[index][4], host_bar_value[index][4], nvme,
+                      temp_color(nvme), value);
+    } else {
+        set_bar_value(host_bar[index][4], host_bar_value[index][4], -1, COLOR_CYAN, "--");
+    }
+    format_pct(value, sizeof(value), cpu, 0);
+    set_bar_value(host_bar[index][5], host_bar_value[index][5], cpu, COLOR_CYAN, value);
 
     if (power >= 0) {
         char est[24];
         if (power_est >= 0) {
-            snprintf(est, sizeof(est), "est %.1fW", power_est);
+            snprintf(est, sizeof(est), "est %.0fW", power_est);
         } else {
             strlcpy(est, "est --", sizeof(est));
         }
-        snprintf(text, sizeof(text), "%.1fW " MIDDOT " %s", power, est);
-        lv_label_set_text(host_meta[index][0], text);
+        snprintf(text, sizeof(text), "%.0fW " MIDDOT " %s " MIDDOT " %s", power, est,
+                 uptime);
     } else {
-        lv_label_set_text(host_meta[index][0], "--");
+        snprintf(text, sizeof(text), "-- " MIDDOT " up %s", uptime);
     }
-    if (soc >= 0 && nvme >= 0) {
-        snprintf(text, sizeof(text), "SoC %.0f" DEGREE_C " " MIDDOT " NVMe %.0f" DEGREE_C,
-                 soc, nvme);
-        lv_label_set_text(host_meta[index][1], text);
-    } else {
-        lv_label_set_text(host_meta[index][1], "--");
-    }
-    if (cpu >= 0) {
-        snprintf(text, sizeof(text), "CPU %.0f%% " MIDDOT " up %s", cpu, uptime);
-    } else {
-        snprintf(text, sizeof(text), "CPU -- " MIDDOT " up %s", uptime);
-    }
-    lv_label_set_text(host_meta[index][2], text);
+    lv_label_set_text(host_foot[index], text);
 
     const bool throttle = json_bool(host, "throttle_thermal") ||
                           json_bool(host, "throttle_power_cap");
