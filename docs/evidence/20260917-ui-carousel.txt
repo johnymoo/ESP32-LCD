@@ -66,3 +66,11 @@ Addendum (same day, after the first rollout)
 - STOP retest completed on hardware: fans coast to ~300 RPM on a solid-low
   line and plateau; user accepted STOP = minimum-speed semantics, no
   supply-cut MOS (documented in FAN-CONTROL-20260916.md).
+
+Addendum (2026-09-18, MODEL page recolor fix)
+---------------------------------------------
+- User video showed the THROUGHPUT row rendering raw colour codes: the
+  prompt-rate recolor string closed its first segment one "#" too late, so
+  "e6f1f5 <rate>" leaked as literal text and jammed against the hero tok/s
+  suffix. String rebuilt with properly closed segments, label moved to
+  12 px at x120 so it clears both the 16 px suffix and the queue chips.

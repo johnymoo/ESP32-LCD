@@ -637,7 +637,7 @@ static void create_model_page(lv_obj_t *screen)
                                     "--", LV_TEXT_ALIGN_AUTO);
     create_label(panel, 74, 46, 0, &lv_font_montserrat_16, COLOR_CYAN, "tok/s",
                  LV_TEXT_ALIGN_AUTO);
-    model_prompt_label = create_label(panel, 114, 42, 96, &lv_font_montserrat_16,
+    model_prompt_label = create_label(panel, 120, 46, 90, &lv_font_montserrat_12,
                                       COLOR_BRIGHT, "", LV_TEXT_ALIGN_AUTO);
     lv_label_set_recolor(model_prompt_label, true);
 
@@ -1102,8 +1102,14 @@ static void update_model_panel(cJSON *model)
 
     snprintf(text, sizeof(text), "%.1f", json_number(model, "generation_tps", 0));
     lv_label_set_text(model_hero_label, text);
-    snprintf(text, sizeof(text), "#8ba8b7 in #e6f1f5 %.1f# #8ba8b7 tok/s#",
-             json_number(model, "prompt_tps", 0));
+    const double prompt_tps = json_number(model, "prompt_tps", 0);
+    if (prompt_tps >= 100.0) {
+        snprintf(text, sizeof(text), "#8ba8b7 in# #e6f1f5 %.0f# #8ba8b7 tok/s#",
+                 prompt_tps);
+    } else {
+        snprintf(text, sizeof(text), "#8ba8b7 in# #e6f1f5 %.1f# #8ba8b7 tok/s#",
+                 prompt_tps);
+    }
     lv_label_set_text(model_prompt_label, text);
 
     const double running = json_number(model, "running", 0);

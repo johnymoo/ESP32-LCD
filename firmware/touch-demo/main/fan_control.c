@@ -31,6 +31,12 @@ static const uint8_t k_stage_level[FAN_STAGE_COUNT] = {0, 35, 65, 100};
 #define FAN_TACH_FAIL_STREAK 3
 #define FAN_STAGE_VOTES 2
 #define FAN_SAMPLE_STALE_S 10
+/* A driven fan cannot shed most of its speed within one second. GPU-load
+ * bursts on the host unit show up as tach dropouts (the pull-ups reference
+ * this board's 3V3), reading e.g. 1350 -> 380 RPM for a window or two while
+ * the fan physically keeps spinning; hold the last value instead. */
+#define FAN_RPM_DROP_RATIO 40
+#define FAN_RPM_DROP_HOLD_WINDOWS 5
 
 static const char *TAG = "fan_control";
 
@@ -54,6 +60,7 @@ static int64_t s_tach_window_us;
 static uint8_t s_tach_zero_streak[2];
 static bool s_tach_ok[2] = {true, true};
 static uint32_t s_rpm[2];
+static uint8_t s_rpm_hold[2];
 static portMUX_TYPE s_tach_mux = portMUX_INITIALIZER_UNLOCKED;
 
 static void IRAM_ATTR fan_tach_isr(void *argument)
@@ -300,21 +307,41 @@ static void fan_tach_window(void)
     portENTER_CRITICAL(&s_tach_mux);
     pulses[0] = s_tach_pulses[0];
     pulses[1] = s_tach_pulses[1];
-    const int64_t now_us = esp_timer_get_time();
-    const int64_t elapsed_us = now_us - s_tach_window_us;
-    s_tach_window_us = now_us;
     portEXIT_CRITICAL(&s_tach_mux);
 
+    /* Commit nothing until the lock is held: a skipped window must leave the
+     * timestamp and the previous counts untouched, so the next window spans
+     * the skipped one with matching delta and elapsed. */
     if (xSemaphoreTake(s_lock, 0) != pdTRUE) {
         return;
     }
+    const int64_t now_us = esp_timer_get_time();
+    const int64_t elapsed_us = now_us - s_tach_window_us;
+    s_tach_window_us = now_us;
     const bool motors_expected = k_stage_level[effective_stage()] > 0 ||
                                  esp_timer_get_time() < s_kick_until_us;
     for (unsigned i = 0; i < 2; i++) {
         const uint32_t delta = pulses[i] - s_tach_prev[i];
         s_tach_prev[i] = pulses[i];
-        s_rpm[i] = (uint32_t)(((uint64_t)delta * 60000000ULL) /
-                              ((uint64_t)elapsed_us * FAN_PULSES_PER_REV));
+        uint32_t rpm = (uint32_t)(((uint64_t)delta * 60000000ULL) /
+                                  ((uint64_t)elapsed_us * FAN_PULSES_PER_REV));
+        if (motors_expected && rpm * 100 < s_rpm[i] * FAN_RPM_DROP_RATIO) {
+            if (s_rpm_hold[i] < FAN_RPM_DROP_HOLD_WINDOWS) {
+                if (s_rpm_hold[i] == 0) {
+                    ESP_LOGW(TAG, "fan%u tach dropout %u -> %u RPM, holding",
+                             i + 1, (unsigned)s_rpm[i], (unsigned)rpm);
+                }
+                s_rpm_hold[i]++;
+                rpm = s_rpm[i];
+            } else {
+                /* Dropouts lasting longer than the hold window are probably
+                 * real; accept them and let the hold re-arm. */
+                s_rpm_hold[i] = 0;
+            }
+        } else {
+            s_rpm_hold[i] = 0;
+        }
+        s_rpm[i] = rpm;
         if (motors_expected) {
             if (delta == 0) {
                 if (s_tach_zero_streak[i] < UINT8_MAX) {
